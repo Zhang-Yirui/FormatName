@@ -18,12 +18,12 @@ const loading = ref(false)
 
 /** 没交: 一次都没匹配到 */
 const missing = computed(() =>
-  newNames.value.filter((_, i) => (map.value[i] ?? 0) === 0),
+    newNames.value.filter((_, i) => (map.value[i] ?? 0) === 0),
 )
 
 /** 多交: 同一个名字匹配到多次 */
 const duplicated = computed(() =>
-  newNames.value.filter((_, i) => (map.value[i] ?? 0) > 1),
+    newNames.value.filter((_, i) => (map.value[i] ?? 0) > 1),
 )
 
 /** 未知: 没有匹配上任何关键字的旧文件 */
@@ -109,7 +109,7 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="mx-auto max-w-6xl">
+  <div class="mx-auto w-[90vw]">
     <el-card shadow="never" class="!rounded-2xl">
       <template #header>
         <div class="flex items-center justify-between">
@@ -155,10 +155,10 @@ onMounted(load)
             <el-scrollbar max-height="130">
               <ul class="space-y-1">
                 <li
-                  v-for="name in missing"
-                  :key="name"
-                  class="flex cursor-pointer items-center justify-between rounded bg-red-50 px-3 py-1 text-xs text-red-700 transition hover:bg-red-100"
-                  @click="copy(name)"
+                    v-for="name in missing"
+                    :key="name"
+                    class="flex cursor-pointer items-center justify-between rounded bg-red-50 px-3 py-1 text-xs text-red-700 transition hover:bg-red-100"
+                    @click="copy(name)"
                 >
                   <span class="whitespace-pre">{{ name }}</span>
                   <el-icon><CopyDocument /></el-icon>
@@ -178,10 +178,10 @@ onMounted(load)
             <el-scrollbar max-height="130">
               <ul class="space-y-1">
                 <li
-                  v-for="name in duplicated"
-                  :key="name"
-                  class="flex cursor-pointer items-center justify-between rounded bg-amber-50 px-3 py-1 text-xs text-amber-700 transition hover:bg-amber-100"
-                  @click="copy(name)"
+                    v-for="name in duplicated"
+                    :key="name"
+                    class="flex cursor-pointer items-center justify-between rounded bg-amber-50 px-3 py-1 text-xs text-amber-700 transition hover:bg-amber-100"
+                    @click="copy(name)"
                 >
                   <span class="whitespace-pre">{{ name }}</span>
                   <el-icon><CopyDocument /></el-icon>
@@ -201,10 +201,10 @@ onMounted(load)
             <el-scrollbar max-height="130">
               <ul class="space-y-1">
                 <li
-                  v-for="name in unknown"
-                  :key="name"
-                  class="flex cursor-pointer items-center justify-between rounded bg-slate-100 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-200"
-                  @click="copy(name)"
+                    v-for="name in unknown"
+                    :key="name"
+                    class="flex cursor-pointer items-center justify-between rounded bg-slate-100 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-200"
+                    @click="copy(name)"
                 >
                   <span class="whitespace-pre">{{ name }}</span>
                   <el-icon><CopyDocument /></el-icon>

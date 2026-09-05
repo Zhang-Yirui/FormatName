@@ -56,7 +56,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
+  <div class="mx-auto flex h-full w-[90vw] flex-col">
     <el-card shadow="never" class="!rounded-2xl" body-class="!p-4">
       <template #header>
         <div class="flex items-center justify-between">
@@ -71,27 +71,27 @@ async function submit() {
       </template>
 
       <el-alert
-        type="info"
-        :closable="false"
-        show-icon
-        title="点击表头可以选择关键字，鼠标悬停在表头上可查看不能作为关键字的原因"
-        class="mb-4"
+          type="info"
+          :closable="false"
+          show-icon
+          title="点击表头可以选择关键字，鼠标悬停在表头上可查看不能作为关键字的原因"
+          class="mb-4"
       />
 
       <el-table
-        :data="rows"
-        border
-        stripe
-        max-height="460"
-        :header-cell-class-name="headerClassName"
-        @header-click="toggleHeader"
+          :data="rows"
+          border
+          stripe
+          max-height="460"
+          :header-cell-class-name="headerClassName"
+          @header-click="toggleHeader"
       >
         <el-table-column
-          v-for="(col, index) in columns"
-          :key="index"
-          :prop="String(index)"
-          :label="col.key"
-          min-width="140"
+            v-for="(col, index) in columns"
+            :key="index"
+            :prop="String(index)"
+            :label="col.key"
+            min-width="140"
         >
           <template #header>
             <el-tooltip :content="col.reason" placement="top" effect="dark">

@@ -81,11 +81,11 @@ function itemExample(item: ExecuteItem): string {
 }
 
 const formatText = computed(
-  () => picked.value.map(itemLabel).join('') + '.xxx',
+    () => picked.value.map(itemLabel).join('') + '.xxx',
 )
 
 const exampleText = computed(
-  () => picked.value.map(itemExample).join('') + '.xxx',
+    () => picked.value.map(itemExample).join('') + '.xxx',
 )
 
 async function pickDir() {
@@ -122,7 +122,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-6xl">
+  <div class="mx-auto w-[90vw]">
     <el-card shadow="never" class="!rounded-2xl">
       <template #header>
         <div class="flex items-center justify-between">
@@ -141,10 +141,10 @@ async function submit() {
         <template v-for="(_item, index) in picked" :key="index">
           <!-- 字段 -->
           <el-card
-            v-if="index % 2 === 0"
-            shadow="never"
-            class="w-56 !rounded-xl !border-brand/30"
-            body-class="!p-3"
+              v-if="index % 2 === 0"
+              shadow="never"
+              class="w-56 !rounded-xl !border-brand/30"
+              body-class="!p-3"
           >
             <template #header>
               <div class="flex items-center justify-between">
@@ -156,29 +156,29 @@ async function submit() {
             </template>
             <el-radio-group v-model="picked[index]" class="!flex !flex-col !items-start gap-1">
               <el-radio
-                v-for="(col, j) in columns"
-                :key="j"
-                :value="j"
-                :disabled="!col.display"
+                  v-for="(col, j) in columns"
+                  :key="j"
+                  :value="j"
+                  :disabled="!col.display"
               >
                 <span :class="{ 'text-slate-300': !col.display }">{{ col.key }}</span>
               </el-radio>
             </el-radio-group>
             <el-input
-              :model-value="customText(index)"
-              size="small"
-              class="mt-2"
-              placeholder="自定义文本"
-              @update:model-value="(v: string) => setCustomText(index, v)"
+                :model-value="customText(index)"
+                size="small"
+                class="mt-2"
+                placeholder="自定义文本"
+                @update:model-value="(v: string) => setCustomText(index, v)"
             />
           </el-card>
 
           <!-- 分隔符 -->
           <el-card
-            v-else-if="!same"
-            shadow="never"
-            class="w-40 !rounded-xl !border-slate-200"
-            body-class="!p-3"
+              v-else-if="!same"
+              shadow="never"
+              class="w-40 !rounded-xl !border-slate-200"
+              body-class="!p-3"
           >
             <template #header>
               <span class="text-xs font-semibold text-slate-500">分隔符</span>
@@ -189,10 +189,10 @@ async function submit() {
               </el-radio>
             </el-radio-group>
             <el-input
-              v-model="picked[index]"
-              size="small"
-              class="mt-2"
-              placeholder="自定义"
+                v-model="picked[index]"
+                size="small"
+                class="mt-2"
+                placeholder="自定义"
             />
           </el-card>
         </template>
@@ -239,11 +239,11 @@ async function submit() {
         </p>
         <div class="flex items-center gap-3">
           <el-input
-            v-model="path"
-            size="large"
-            placeholder="请输入包含待改名文件的文件夹路径"
-            clearable
-            @keyup.enter="submit"
+              v-model="path"
+              size="large"
+              placeholder="请输入包含待改名文件的文件夹路径"
+              clearable
+              @keyup.enter="submit"
           />
           <el-button size="large" :icon="FolderOpened" @click="pickDir">浏览</el-button>
         </div>

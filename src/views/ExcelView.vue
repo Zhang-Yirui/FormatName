@@ -111,7 +111,7 @@ onUnmounted(() => unlistenDragDrop?.())
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl">
+  <div class="mx-auto w-[90vw]">
     <el-card shadow="never" class="!rounded-2xl">
       <template #header>
         <div class="flex items-center gap-2 text-lg font-semibold text-brand">
