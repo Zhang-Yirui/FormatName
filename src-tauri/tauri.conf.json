@@ -4,17 +4,18 @@
   "version": "0.1.0",
   "identifier": "com.bd3qif.formatname",
   "build": {
-    "beforeDevCommand": "yarn dev",
+    "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "yarn build",
+    "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
         "title": "FormatName",
-        "width": 800,
-        "height": 600
+        "width": 1000, "height": 750,
+        "minWidth": 1000, "minHeight": 750,
+        "center": true, "maximized": true
       }
     ],
     "security": {
@@ -23,13 +24,34 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["deb", "rpm", "appimage", "msi", "nsis"],
+    "publisher": "静凇",
+    "copyright": "Copyright © 2026 静凇",
+    "license": "Apache-2.0",
+    "category": "Utility",
+    "shortDescription": "FormatName 格式化命名",
+    "longDescription": "根据 Excel 花名册批量重命名文件的桌面工具",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "deb": { "depends": [] }
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": null,
+      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "wix": { "language": "zh-CN" },
+      "nsis": {
+        "languages": ["SimpChinese"],
+        "displayLanguageSelector": false,
+        "installMode": "currentUser"
+      }
+    }
   }
 }

@@ -27,7 +27,7 @@ const appInfo = ref<AppInfoResp>({
   description: "FormatName 格式化命名",
   authors: ["静凇"],
   homepage: "#",
-  license: "MIT",
+  license: "Apache-2.0",
   repository: "#"
 })
 const aboutVisible = ref(false)
