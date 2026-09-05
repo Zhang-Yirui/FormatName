@@ -1,0 +1,236 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { writeText } from '@tauri-apps/plugin-clipboard-manager'
+import { ElMessage } from 'element-plus'
+import { ArrowLeft, CopyDocument, DataAnalysis, Refresh } from '@element-plus/icons-vue'
+import { backup, getExecute, recover, rename } from '@/api'
+import type { NamePair } from '@/types'
+
+const router = useRouter()
+
+const list = ref<NamePair[]>([])
+const newNames = ref<string[]>([])
+const oldNames = ref<string[]>([])
+const map = ref<number[]>([])
+const flag = ref(0)
+const loading = ref(false)
+
+/** 没交: 一次都没匹配到 */
+const missing = computed(() =>
+  newNames.value.filter((_, i) => (map.value[i] ?? 0) === 0),
+)
+
+/** 多交: 同一个名字匹配到多次 */
+const duplicated = computed(() =>
+  newNames.value.filter((_, i) => (map.value[i] ?? 0) > 1),
+)
+
+/** 未知: 没有匹配上任何关键字的旧文件 */
+const unknown = computed(() => {
+  const matched = new Set(list.value.map((i) => i.old))
+  return oldNames.value.filter((name) => !matched.has(name))
+})
+
+async function load() {
+  try {
+    const res = await getExecute()
+    list.value = res.list
+    newNames.value = res.new
+    oldNames.value = res.old
+    map.value = res.map
+    flag.value = res.flag
+  } catch (e) {
+    ElMessage.error(`获取数据失败：${e}`)
+  }
+}
+
+async function copy(text: string) {
+  try {
+    await writeText(text)
+    ElMessage.success('已复制到剪贴板')
+  } catch {
+    ElMessage.error('复制失败')
+  }
+}
+
+async function doRename() {
+  loading.value = true
+  try {
+    const res = await rename()
+    if (res.code === 0) {
+      ElMessage.success(res.msg)
+      flag.value = 1
+    } else {
+      ElMessage.error(res.msg)
+    }
+  } catch (e) {
+    ElMessage.error(`改名失败：${e}`)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function doRecover() {
+  loading.value = true
+  try {
+    const res = await recover()
+    if (res.code === 0) {
+      ElMessage.success(res.msg)
+      flag.value = 0
+    } else {
+      ElMessage.error(res.msg)
+    }
+  } catch (e) {
+    ElMessage.error(`恢复失败：${e}`)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function doBackup() {
+  loading.value = true
+  try {
+    const res = await backup()
+    if (res.code !== 0) {
+      ElMessage.error(res.msg)
+      return
+    }
+    ElMessage.success(res.msg)
+    await doRename()
+  } catch (e) {
+    ElMessage.error(`备份失败：${e}`)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(load)
+</script>
+
+<template>
+  <div class="mx-auto max-w-6xl">
+    <el-card shadow="never" class="!rounded-2xl">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2 text-lg font-semibold text-brand">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>第四步：数据分析</span>
+          </div>
+          <el-tag :type="flag === 0 ? 'info' : 'success'" effect="dark" round>
+            {{ flag === 0 ? '待改名' : '已改名' }}
+          </el-tag>
+        </div>
+      </template>
+
+      <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <!-- 新旧名字对照 -->
+        <div>
+          <h3 class="mb-2 text-sm font-semibold text-slate-600">
+            新旧名字对照（{{ list.length }} 个文件）
+          </h3>
+          <el-table :data="list" border stripe max-height="420">
+            <el-table-column prop="old" label="旧名字" min-width="200" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="whitespace-pre">{{ row.old }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="new" label="新名字" min-width="200" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="whitespace-pre text-brand">{{ row.new }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+
+        <!-- 统计 -->
+        <div class="space-y-4">
+          <div>
+            <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600">
+              没交
+              <el-tag size="small" type="danger" effect="dark" round>
+                {{ missing.length }}
+              </el-tag>
+            </h3>
+            <el-scrollbar max-height="130">
+              <ul class="space-y-1">
+                <li
+                  v-for="name in missing"
+                  :key="name"
+                  class="flex cursor-pointer items-center justify-between rounded bg-red-50 px-3 py-1 text-xs text-red-700 transition hover:bg-red-100"
+                  @click="copy(name)"
+                >
+                  <span class="whitespace-pre">{{ name }}</span>
+                  <el-icon><CopyDocument /></el-icon>
+                </li>
+                <li v-if="missing.length === 0" class="px-3 text-xs text-slate-400">无</li>
+              </ul>
+            </el-scrollbar>
+          </div>
+
+          <div>
+            <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600">
+              多交
+              <el-tag size="small" type="warning" effect="dark" round>
+                {{ duplicated.length }}
+              </el-tag>
+            </h3>
+            <el-scrollbar max-height="130">
+              <ul class="space-y-1">
+                <li
+                  v-for="name in duplicated"
+                  :key="name"
+                  class="flex cursor-pointer items-center justify-between rounded bg-amber-50 px-3 py-1 text-xs text-amber-700 transition hover:bg-amber-100"
+                  @click="copy(name)"
+                >
+                  <span class="whitespace-pre">{{ name }}</span>
+                  <el-icon><CopyDocument /></el-icon>
+                </li>
+                <li v-if="duplicated.length === 0" class="px-3 text-xs text-slate-400">无</li>
+              </ul>
+            </el-scrollbar>
+          </div>
+
+          <div>
+            <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600">
+              未知
+              <el-tag size="small" type="info" effect="dark" round>
+                {{ unknown.length }}
+              </el-tag>
+            </h3>
+            <el-scrollbar max-height="130">
+              <ul class="space-y-1">
+                <li
+                  v-for="name in unknown"
+                  :key="name"
+                  class="flex cursor-pointer items-center justify-between rounded bg-slate-100 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-200"
+                  @click="copy(name)"
+                >
+                  <span class="whitespace-pre">{{ name }}</span>
+                  <el-icon><CopyDocument /></el-icon>
+                </li>
+                <li v-if="unknown.length === 0" class="px-3 text-xs text-slate-400">无</li>
+              </ul>
+            </el-scrollbar>
+          </div>
+
+          <p class="text-xs text-slate-400">点击列表内容即可复制到剪贴板</p>
+        </div>
+      </div>
+
+      <div class="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+        <el-button size="large" :icon="ArrowLeft" @click="router.push('/format')">返回</el-button>
+        <el-button v-if="flag === 0" type="primary" size="large" :loading="loading" @click="doRename">
+          改名
+        </el-button>
+        <el-button v-else type="danger" size="large" :icon="Refresh" :loading="loading" @click="doRecover">
+          恢复
+        </el-button>
+        <el-button v-if="flag === 0" size="large" :loading="loading" @click="doBackup">
+          备份并改名
+        </el-button>
+        <el-button size="large" text @click="load">刷新</el-button>
+      </div>
+    </el-card>
+  </div>
+</template>
