@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { ElMessage } from 'element-plus'
 import {
   ArrowLeft,
@@ -11,6 +10,7 @@ import {
   RefreshRight,
 } from '@element-plus/icons-vue'
 import { backup, getExecute, recover, rename, rescan } from '@/api'
+import { copyText } from '@/utils/clipboard'
 import type { NamePair } from '@/types'
 
 const router = useRouter()
@@ -72,10 +72,10 @@ async function doRefresh() {
 
 async function copy(text: string) {
   try {
-    await writeText(text)
+    await copyText(text)
     ElMessage.success('已复制到剪贴板')
-  } catch {
-    ElMessage.error('复制失败')
+  } catch (e) {
+    ElMessage.error(`复制失败：${e instanceof Error ? e.message : e}`)
   }
 }
 
