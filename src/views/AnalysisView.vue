@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft,
   CopyDocument,
@@ -54,6 +54,19 @@ async function load() {
 
 /** 重新扫描目录：目录里的文件在程序外被改动后用它刷新分析结果 */
 async function doRefresh() {
+  // 已改名状态下刷新会改动磁盘：新出现的文件会被立即改名，丢失的文件会从对照表中移除
+  if (flag.value !== 0) {
+    try {
+      await ElMessageBox.confirm(
+          '将重新扫描目录：新放进来的文件会被立即改名，已经不在目录里的文件会从对照表中移除（无法再恢复）。是否继续？',
+          '重新扫描',
+          { type: 'warning', confirmButtonText: '继续扫描', cancelButtonText: '取消' },
+      )
+    } catch {
+      return
+    }
+  }
+
   refreshing.value = true
   try {
     const res = await rescan()
@@ -259,7 +272,7 @@ onMounted(load)
             text
             :icon="RefreshRight"
             :loading="refreshing"
-            title="重新扫描目录并重新计算匹配结果"
+            title="重新扫描目录并重新计算匹配结果（改名后刷新会立即处理新放入的文件）"
             @click="doRefresh"
         >
           刷新

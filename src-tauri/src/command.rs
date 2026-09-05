@@ -189,6 +189,21 @@ pub fn submit_execute(path: String, execute: Vec<ExecuteItem>, state: State<AppS
     ApiResp::ok("提交成功")
 }
 
+/// 用关键字匹配一个文件名，返回它对应的新名字下标
+fn find_key(keywords: &[ColData], new_len: usize, file_name: &str) -> Option<usize> {
+    for kw in keywords {
+        for (k, value) in kw.values.iter().enumerate() {
+            if value.is_empty() || k >= new_len {
+                continue;
+            }
+            if compile(value).is_match(file_name) {
+                return Some(k);
+            }
+        }
+    }
+    None
+}
+
 /// 根据表格数据、命名格式和目录中的文件名，计算新名字与新旧名字对照
 ///
 /// 返回 `(排序后的关键字, 新名字列表, 每个名字的匹配次数, 新旧名字对照表)`
@@ -231,32 +246,20 @@ fn build_execute(
     let mut map = vec![0i32; rows];
     let mut list: Vec<NamePair> = Vec::new();
     for old_name in old {
+        let Some(k) = find_key(&keywords, new.len(), old_name) else {
+            continue;
+        };
         let suffix = last_name(old_name);
-        let mut found = false;
-        for kw in &keywords {
-            for (k, value) in kw.values.iter().enumerate() {
-                if value.is_empty() || k >= new.len() {
-                    continue;
-                }
-                if compile(value).is_match(old_name) {
-                    let new_name = if map[k] > 0 {
-                        format!("{}({}){}", new[k], map[k], suffix)
-                    } else {
-                        format!("{}{}", new[k], suffix)
-                    };
-                    list.push(NamePair {
-                        old: old_name.clone(),
-                        new: new_name,
-                    });
-                    map[k] += 1;
-                    found = true;
-                    break;
-                }
-            }
-            if found {
-                break;
-            }
-        }
+        let new_name = if map[k] > 0 {
+            format!("{}({}){}", new[k], map[k], suffix)
+        } else {
+            format!("{}{}", new[k], suffix)
+        };
+        list.push(NamePair {
+            old: old_name.clone(),
+            new: new_name,
+        });
+        map[k] += 1;
     }
 
     // 查询新名字中是否包含非法字符
@@ -299,10 +302,14 @@ pub fn get_execute(state: State<AppState>) -> ExecuteResp {
 ///
 /// 目录里的文件在程序之外被增删改后，用它刷新分析结果
 ///
+/// - 未改名（`flag == 0`）：目录里都是旧文件名，整份重新计算；
+/// - 已改名（`flag == 1`）：目录里是新文件名，只做增量更新——
+///   已经不在目录里的文件从对照表里移除，新出现的文件立即按规则改名并加入对照表，
+///   这样对照表始终是「本次已完成的改名映射」，因此随时都能正常恢复
+///
 /// 返回值：
 /// - 0：刷新成功
-/// - 1：已经改过名了，请先恢复原文件名
-/// - 3：尚未提交目录，或目录已不存在
+/// - 3：尚未提交目录、目录已不存在，或新增文件改名失败（已自动回滚）
 /// - 4：尚未导入 Excel 数据
 /// - 5：新文件名中会包含不允许使用的字符
 /// - 6：目录读取失败
@@ -310,9 +317,6 @@ pub fn get_execute(state: State<AppState>) -> ExecuteResp {
 #[tauri::command]
 pub fn rescan(state: State<AppState>) -> ApiResp {
     let mut exec = state.get_execute();
-    if exec.flag != 0 {
-        return ApiResp::err(1, "已经改过名了，请先恢复原文件名再刷新");
-    }
     if exec.path.is_empty() {
         return ApiResp::err(3, "请先提交要改名的文件夹");
     }
@@ -321,36 +325,123 @@ pub fn rescan(state: State<AppState>) -> ApiResp {
         return ApiResp::err(3, "目录已不存在，请重新提交文件夹");
     }
 
-    let data = state.get_config().data;
-    if data.is_empty() {
-        return ApiResp::err(4, "请先导入 Excel 数据");
-    }
-
-    let old = match list_files(&dir) {
+    let current = match list_files(&dir) {
         Ok(v) => v,
         Err(e) => return ApiResp::err(6, format!("读取目录失败：{}", e)),
     };
 
-    let (keywords, new, map, list) = match build_execute(&data, &exec.execute, &old) {
-        Ok(v) => v,
-        Err(e) => return e,
-    };
-    let total = old.len();
-    let matched = list.len();
+    // ------------------------------------------------ 未改名：整份重算
+    if exec.flag == 0 {
+        let data = state.get_config().data;
+        if data.is_empty() {
+            return ApiResp::err(4, "请先导入 Excel 数据");
+        }
 
-    exec.data = keywords;
-    exec.new = new;
+        let (keywords, new, map, list) = match build_execute(&data, &exec.execute, &current) {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+        let total = current.len();
+        let matched = list.len();
+
+        exec.data = keywords;
+        exec.new = new;
+        exec.map = map;
+        exec.old = current;
+        exec.list = list;
+        if let Err(e) = state.set_execute(exec) {
+            return ApiResp::err(7, e);
+        }
+
+        return ApiResp::ok(format!(
+            "已重新扫描：共 {} 个文件，匹配到 {} 个",
+            total, matched
+        ));
+    }
+
+    // ------------------------------------------------ 已改名：增量更新
+    // 磁盘上当前存在的文件名，给新文件挑名字时用来避让
+    let mut exists: HashSet<String> = current.iter().cloned().collect();
+    // 已经纳入本次改名任务的文件名
+    let mut used: HashSet<String> = HashSet::new();
+
+    let mut map = vec![0i32; exec.new.len()];
+    let mut list: Vec<NamePair> = Vec::new();
+    let mut kept = 0usize;
+    let mut gone = 0usize;
+
+    // 还在的就保留原来的映射，已经不在目录里的从对照表中移除
+    for pair in &exec.list {
+        if !exists.contains(&pair.new) {
+            gone += 1;
+            continue;
+        }
+        if let Some(k) = find_key(&exec.data, exec.new.len(), &pair.old) {
+            map[k] += 1;
+        }
+        used.insert(pair.new.clone());
+        list.push(pair.clone());
+        kept += 1;
+    }
+
+    // 新出现的文件：按规则改名后加入对照表
+    let mut jobs: Vec<(String, String)> = Vec::new();
+    for name in &current {
+        if used.contains(name) {
+            continue;
+        }
+        let Some(k) = find_key(&exec.data, exec.new.len(), name) else {
+            continue;
+        };
+        let suffix = last_name(name);
+        let mut n = map[k];
+        let mut new_name = if n > 0 {
+            format!("{}({}){}", exec.new[k], n, suffix)
+        } else {
+            format!("{}{}", exec.new[k], suffix)
+        };
+        while exists.contains(&new_name) {
+            n += 1;
+            new_name = format!("{}({}){}", exec.new[k], n, suffix);
+        }
+        exists.insert(new_name.clone());
+        jobs.push((name.clone(), new_name));
+    }
+
+    let jobs_ref: Vec<(&str, &str)> = jobs
+        .iter()
+        .map(|(old, new)| (old.as_str(), new.as_str()))
+        .collect();
+    if !jobs_ref.is_empty() {
+        if let Err(e) = rename_atomic(&dir, &jobs_ref) {
+            return ApiResp::err(3, rename_err_msg("改名", e));
+        }
+        for (old, new) in &jobs {
+            if let Some(k) = find_key(&exec.data, exec.new.len(), old) {
+                map[k] += 1;
+            }
+            list.push(NamePair {
+                old: old.clone(),
+                new: new.clone(),
+            });
+        }
+    }
+
     exec.map = map;
-    exec.old = old;
+    exec.old = current;
     exec.list = list;
     if let Err(e) = state.set_execute(exec) {
         return ApiResp::err(7, e);
     }
 
-    ApiResp::ok(format!(
-        "已重新扫描：共 {} 个文件，匹配到 {} 个",
-        total, matched
-    ))
+    let mut msg = format!("已重新扫描：{} 个文件保持已改名状态", kept);
+    if gone > 0 {
+        msg += &format!("，{} 个文件已不在目录中，已从对照表移除", gone);
+    }
+    if !jobs.is_empty() {
+        msg += &format!("，新增 {} 个文件并已改名", jobs.len());
+    }
+    ApiResp::ok(msg)
 }
 
 /// 发起重命名
