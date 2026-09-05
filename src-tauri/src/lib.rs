@@ -1,6 +1,7 @@
 use tauri::Manager;
 
 mod command;
+mod db;
 mod excel;
 mod model;
 mod state;
@@ -47,5 +48,5 @@ pub fn run() {
             command::clear_data,
         ])
         .run(tauri::generate_context!())
-        .expect("启动 FormatName 失败");
+        .expect("启动 Format Name 失败");
 }

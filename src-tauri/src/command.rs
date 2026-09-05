@@ -53,7 +53,9 @@ pub fn clear_data(state: State<AppState>) -> ApiResp {
     if let Err(e) = state.set_config(Config::default()) {
         return ApiResp::err(1, e);
     }
-    *state.execute.lock().unwrap() = Default::default();
+    if let Err(e) = state.reset_execute() {
+        return ApiResp::err(1, e);
+    }
     ApiResp::ok("已清空")
 }
 
@@ -104,7 +106,9 @@ pub fn submit_excel_path(path: String, state: State<AppState>) -> ApiResp {
             if let Err(e) = state.set_config(config) {
                 return ApiResp::err(6, e);
             }
-            *state.execute.lock().unwrap() = Default::default();
+            if let Err(e) = state.reset_execute() {
+                return ApiResp::err(6, e);
+            }
             ApiResp::ok("读取成功")
         }
         0 => ApiResp::err(3, "文件不能为空"),
@@ -168,8 +172,7 @@ pub fn submit_execute(path: String, execute: Vec<ExecuteItem>, state: State<AppS
         Err(e) => return e,
     };
 
-    let mut guard = state.execute.lock().unwrap();
-    *guard = crate::model::Execute {
+    let exec = crate::model::Execute {
         flag: 0,
         path: path.clone(),
         execute,
@@ -179,7 +182,9 @@ pub fn submit_execute(path: String, execute: Vec<ExecuteItem>, state: State<AppS
         old,
         list,
     };
-    drop(guard);
+    if let Err(e) = state.set_execute(exec) {
+        return ApiResp::err(6, e);
+    }
 
     ApiResp::ok("提交成功")
 }
@@ -280,13 +285,13 @@ fn list_files(dir: &Path) -> Result<Vec<String>, String> {
 /// 获取本次改名的操作以及新旧名字
 #[tauri::command]
 pub fn get_execute(state: State<AppState>) -> ExecuteResp {
-    let guard = state.execute.lock().unwrap();
+    let exec = state.get_execute();
     ExecuteResp {
-        map: guard.map.clone(),
-        list: guard.list.clone(),
-        new: guard.new.clone(),
-        old: guard.old.clone(),
-        flag: guard.flag,
+        map: exec.map,
+        list: exec.list,
+        new: exec.new,
+        old: exec.old,
+        flag: exec.flag,
     }
 }
 
@@ -301,19 +306,17 @@ pub fn get_execute(state: State<AppState>) -> ExecuteResp {
 /// - 4：尚未导入 Excel 数据
 /// - 5：新文件名中会包含不允许使用的字符
 /// - 6：目录读取失败
+/// - 7：状态保存失败
 #[tauri::command]
 pub fn rescan(state: State<AppState>) -> ApiResp {
-    let (flag, path, execute) = {
-        let guard = state.execute.lock().unwrap();
-        (guard.flag, guard.path.clone(), guard.execute.clone())
-    };
-    if flag != 0 {
+    let mut exec = state.get_execute();
+    if exec.flag != 0 {
         return ApiResp::err(1, "已经改过名了，请先恢复原文件名再刷新");
     }
-    if path.is_empty() {
+    if exec.path.is_empty() {
         return ApiResp::err(3, "请先提交要改名的文件夹");
     }
-    let dir = PathBuf::from(&path);
+    let dir = PathBuf::from(&exec.path);
     if !dir.is_dir() {
         return ApiResp::err(3, "目录已不存在，请重新提交文件夹");
     }
@@ -328,20 +331,21 @@ pub fn rescan(state: State<AppState>) -> ApiResp {
         Err(e) => return ApiResp::err(6, format!("读取目录失败：{}", e)),
     };
 
-    let (keywords, new, map, list) = match build_execute(&data, &execute, &old) {
+    let (keywords, new, map, list) = match build_execute(&data, &exec.execute, &old) {
         Ok(v) => v,
         Err(e) => return e,
     };
     let total = old.len();
     let matched = list.len();
 
-    let mut guard = state.execute.lock().unwrap();
-    guard.data = keywords;
-    guard.new = new;
-    guard.map = map;
-    guard.old = old;
-    guard.list = list;
-    drop(guard);
+    exec.data = keywords;
+    exec.new = new;
+    exec.map = map;
+    exec.old = old;
+    exec.list = list;
+    if let Err(e) = state.set_execute(exec) {
+        return ApiResp::err(7, e);
+    }
 
     ApiResp::ok(format!(
         "已重新扫描：共 {} 个文件，匹配到 {} 个",
@@ -351,111 +355,76 @@ pub fn rescan(state: State<AppState>) -> ApiResp {
 
 /// 发起重命名
 ///
+/// 改名过程保证原子性：只要有文件改不动，已经改过的文件会被改回原样。
+///
 /// 返回值：
 /// - 0：改名成功
 /// - 1：重复点击改名
 /// - 2：新名字不能重复
-/// - 3：部分文件改名失败
+/// - 3：部分文件改名失败（已自动回滚）
+/// - 7：状态保存失败
 #[tauri::command]
 pub fn rename(state: State<AppState>) -> ApiResp {
-    let mut guard = state.execute.lock().unwrap();
-    if guard.flag != 0 {
+    let exec = state.get_execute();
+    if exec.flag != 0 {
         return ApiResp::err(1, "已经改过名了，请勿重复点击");
     }
-    if guard.list.is_empty() {
+    if exec.list.is_empty() {
         return ApiResp::err(2, "没有需要改名的文件，请先提交目录");
     }
 
     let mut uniq: HashSet<&String> = HashSet::new();
-    for pair in &guard.list {
+    for pair in &exec.list {
         if !uniq.insert(&pair.new) {
             return ApiResp::err(2, "新名字不能重复");
         }
     }
 
-    let dir = PathBuf::from(&guard.path);
-    let pairs = guard.list.clone();
-
-    let mut failed: Vec<String> = Vec::new();
-    for pair in &pairs {
-        if let Err(_) = fs::rename(dir.join(&pair.old), dir.join(&pair.new)) {
-            failed.push(pair.old.clone());
-        }
-    }
-    // 有的旧名字可能和某些新名字相同，先改成一个临时名字再改成目标名字
-    if !failed.is_empty() {
-        let retry = failed;
-        failed = Vec::new();
-        for old in &retry {
-            let pair = pairs.iter().find(|p| &p.old == old).unwrap();
-            let tmp = format!("__format_name_tmp__{}", pair.new);
-            let from = dir.join(&pair.old);
-            let mid = dir.join(&tmp);
-            let to = dir.join(&pair.new);
-            match fs::rename(&from, &mid).and_then(|_| fs::rename(&mid, &to)) {
-                Ok(_) => {}
-                Err(_) => {
-                    let _ = fs::rename(&mid, &from);
-                    failed.push(pair.old.clone());
-                }
-            }
-        }
+    let dir = PathBuf::from(&exec.path);
+    let jobs: Vec<(&str, &str)> = exec
+        .list
+        .iter()
+        .map(|p| (p.old.as_str(), p.new.as_str()))
+        .collect();
+    if let Err(e) = rename_atomic(&dir, &jobs) {
+        return ApiResp::err(3, rename_err_msg("改名", e));
     }
 
-    if !failed.is_empty() {
-        return ApiResp::err(3, format!("以下文件改名失败：{}", failed.join("、")));
+    if let Err(e) = state.set_flag(1) {
+        return ApiResp::err(7, e);
     }
-
-    guard.flag = 1;
     ApiResp::ok("改名成功")
 }
 
 /// 恢复原文件名
 ///
+/// 和改名一样保证原子性：只要有文件恢复不了，已经恢复的文件会被改回新名字。
+///
 /// 返回值：
 /// - 0：恢复成功
 /// - 1：尚未进行重命名
-/// - 2：部分文件恢复失败
+/// - 2：部分文件恢复失败（已自动回滚）
+/// - 7：状态保存失败
 #[tauri::command]
 pub fn recover(state: State<AppState>) -> ApiResp {
-    let mut guard = state.execute.lock().unwrap();
-    if guard.flag == 0 {
+    let exec = state.get_execute();
+    if exec.flag == 0 {
         return ApiResp::err(1, "尚未进行重命名");
     }
 
-    let dir = PathBuf::from(&guard.path);
-    let pairs = guard.list.clone();
-
-    let mut failed: Vec<String> = Vec::new();
-    for pair in &pairs {
-        if let Err(_) = fs::rename(dir.join(&pair.new), dir.join(&pair.old)) {
-            failed.push(pair.new.clone());
-        }
-    }
-    if !failed.is_empty() {
-        let retry = failed;
-        failed = Vec::new();
-        for new in &retry {
-            let pair = pairs.iter().find(|p| &p.new == new).unwrap();
-            let tmp = format!("__format_name_tmp__{}", pair.old);
-            let from = dir.join(&pair.new);
-            let mid = dir.join(&tmp);
-            let to = dir.join(&pair.old);
-            match fs::rename(&from, &mid).and_then(|_| fs::rename(&mid, &to)) {
-                Ok(_) => {}
-                Err(_) => {
-                    let _ = fs::rename(&mid, &from);
-                    failed.push(pair.new.clone());
-                }
-            }
-        }
+    let dir = PathBuf::from(&exec.path);
+    let jobs: Vec<(&str, &str)> = exec
+        .list
+        .iter()
+        .map(|p| (p.new.as_str(), p.old.as_str()))
+        .collect();
+    if let Err(e) = rename_atomic(&dir, &jobs) {
+        return ApiResp::err(2, rename_err_msg("恢复", e));
     }
 
-    if !failed.is_empty() {
-        return ApiResp::err(2, format!("以下文件恢复失败：{}", failed.join("、")));
+    if let Err(e) = state.set_flag(0) {
+        return ApiResp::err(7, e);
     }
-
-    guard.flag = 0;
     ApiResp::ok("恢复成功")
 }
 
@@ -468,17 +437,17 @@ pub fn recover(state: State<AppState>) -> ApiResp {
 /// - 3：备份失败
 #[tauri::command]
 pub fn backup(state: State<AppState>) -> ApiResp {
-    let guard = state.execute.lock().unwrap();
-    if guard.flag != 0 {
+    let exec = state.get_execute();
+    if exec.flag != 0 {
         return ApiResp::err(1, "已经改名请先恢复再备份");
     }
-    if guard.path.is_empty() {
+    if exec.path.is_empty() {
         return ApiResp::err(3, "请先提交要改名的文件夹");
     }
 
     let now = Local::now();
     let name = format!("{} 备份", now.format("%Y年%m月%d日 %H时%M分%S"));
-    let base = PathBuf::from(&guard.path);
+    let base = PathBuf::from(&exec.path);
     let dir = base.join(&name);
     if dir.exists() {
         return ApiResp::err(2, "目录已存在，请重试");
@@ -486,7 +455,7 @@ pub fn backup(state: State<AppState>) -> ApiResp {
     if let Err(e) = fs::create_dir_all(&dir) {
         return ApiResp::err(3, format!("创建备份目录失败：{}", e));
     }
-    for file in &guard.old {
+    for file in &exec.old {
         let from = base.join(file);
         let to = dir.join(file);
         if let Err(e) = fs::copy(&from, &to) {
@@ -494,4 +463,301 @@ pub fn backup(state: State<AppState>) -> ApiResp {
         }
     }
     ApiResp::ok("备份成功")
+}
+
+// ---------------------------------------------------------------- 文件操作
+
+/// 一次批量重命名中没能完成的部分
+#[derive(Debug)]
+struct RenameErr {
+    /// 没能改成目标名字的文件（操作前的名字）
+    failed: Vec<String>,
+    /// 回滚时没能改回去的文件（操作后的名字）
+    rollback_failed: Vec<String>,
+    /// 补充说明，例如「目标名字已被占用」
+    note: String,
+}
+
+impl RenameErr {
+    fn new(failed: Vec<String>, note: &str) -> Self {
+        Self {
+            failed,
+            rollback_failed: Vec::new(),
+            note: note.to_string(),
+        }
+    }
+}
+
+/// 一次改名任务在磁盘上的当前状态
+struct Task<'a> {
+    /// 改动之前的名字
+    from: &'a str,
+    /// 想要改成的名字
+    to: &'a str,
+    /// 中转用的临时名字
+    tmp: String,
+    /// 此刻在磁盘上的名字
+    now: String,
+}
+
+/// 目录内的一次重命名，源名和目标名相同时什么都不用做
+fn move_file(dir: &Path, from: &str, to: &str) -> std::io::Result<()> {
+    if from == to {
+        return Ok(());
+    }
+    fs::rename(dir.join(from), dir.join(to))
+}
+
+/// 两个文件名是否指向同一个文件
+///
+/// Windows 的文件名不区分大小写，所以 `a.txt` 和 `A.txt` 算同一个文件，
+/// 只改大小写时不能当成「目标名字已被占用」。
+fn same_name(a: &str, b: &str) -> bool {
+    a == b || (cfg!(windows) && a.eq_ignore_ascii_case(b))
+}
+
+/// 挑一个目录里没有的临时名字（避开上次异常退出留下的残留）
+fn pick_tmp(dir: &Path, index: usize) -> String {
+    let mut name = format!("__format_name_tmp__{}", index);
+    let mut n = 0;
+    while dir.join(&name).exists() {
+        n += 1;
+        name = format!("__format_name_tmp__{}_{}", index, n);
+    }
+    name
+}
+
+/// 批量重命名，保证原子性
+///
+/// 按给定顺序把 `from` 改名为 `to`，中途出错会把已经改过的文件全部改回原样：
+///
+/// 1. 先检查目标名字：不能重复，也不能是目录里与本次无关的同名文件
+///    （`fs::rename` 在 Windows 上会直接覆盖同名文件，必须提前拦住，否则会丢文件）；
+/// 2. 每个文件先改成一个不会重复的临时名字，此时所有旧名字都被腾空；
+/// 3. 再从临时名字改成目标名字，这样即使旧名字和别人的新名字相同也不会互相覆盖；
+/// 4. 任何一步失败都调用 `rollback` 把已改动的文件改回去。
+fn rename_atomic(dir: &Path, jobs: &[(&str, &str)]) -> Result<(), RenameErr> {
+    // 参与本次改名的旧名字
+    let sources: HashSet<&str> = jobs.iter().map(|job| job.0).collect();
+    let mut targets: HashSet<&str> = HashSet::new();
+    for &(from, to) in jobs {
+        if from == to {
+            continue;
+        }
+        if !targets.insert(to) {
+            return Err(RenameErr::new(
+                vec![from.to_string()],
+                "目标名字与其他文件重复",
+            ));
+        }
+        // 目标名字被「不参与本次改名」的文件占着时不能覆盖，直接报错
+        if !sources.iter().any(|from| same_name(from, to)) && dir.join(to).exists() {
+            return Err(RenameErr::new(
+                vec![from.to_string()],
+                &format!("目录里已经存在名为 {} 的文件", to),
+            ));
+        }
+    }
+
+    let mut tasks: Vec<Task> = jobs
+        .iter()
+        .enumerate()
+        .map(|(i, &(from, to))| Task {
+            from,
+            to,
+            tmp: pick_tmp(dir, i),
+            now: from.to_string(),
+        })
+        .collect();
+
+    // 第一步：旧名字 -> 临时名字
+    for i in 0..tasks.len() {
+        if tasks[i].from == tasks[i].to {
+            continue;
+        }
+        let tmp = tasks[i].tmp.clone();
+        if move_file(dir, &tasks[i].now, &tmp).is_err() {
+            let mut err = RenameErr::new(vec![tasks[i].from.to_string()], "文件被占用或已不存在");
+            err.rollback_failed = rollback(dir, &mut tasks[..i]);
+            return Err(err);
+        }
+        tasks[i].now = tmp;
+    }
+
+    // 第二步：临时名字 -> 新名字（旧名字此时已全部腾空，不会互相覆盖）
+    for i in 0..tasks.len() {
+        if tasks[i].from == tasks[i].to {
+            continue;
+        }
+        if move_file(dir, &tasks[i].now, tasks[i].to).is_err() {
+            let mut err = RenameErr::new(vec![tasks[i].from.to_string()], "文件被占用或已不存在");
+            // i 之前的文件已经改成新名字，i 之后的还停在临时名字，都要回滚
+            err.rollback_failed = rollback(dir, &mut tasks);
+            return Err(err);
+        }
+        tasks[i].now = tasks[i].to.to_string();
+    }
+
+    Ok(())
+}
+
+/// 把已经改动过的文件改回原样，返回没能改回去的文件（改动后的名字）
+fn rollback(dir: &Path, tasks: &mut [Task]) -> Vec<String> {
+    fn back(dir: &Path, task: &mut Task) -> bool {
+        if task.now == task.from {
+            return true;
+        }
+        if move_file(dir, &task.now, task.from).is_ok() {
+            task.now = task.from.to_string();
+            true
+        } else {
+            false
+        }
+    }
+
+    loop {
+        let mut progressed = false;
+        for task in tasks.iter_mut() {
+            if back(dir, task) {
+                progressed = true;
+            }
+        }
+        if tasks.iter().all(|task| task.now == task.from) {
+            break;
+        }
+        if progressed {
+            continue;
+        }
+        // 剩下的互相挡着（比如两个文件交换名字），先全部挪到临时名字腾出位置
+        for task in tasks.iter_mut() {
+            if task.now == task.from {
+                continue;
+            }
+            let tmp = task.tmp.clone();
+            if move_file(dir, &task.now, &tmp).is_ok() {
+                task.now = tmp;
+            }
+        }
+        let mut done = false;
+        for task in tasks.iter_mut() {
+            if back(dir, task) {
+                done = true;
+            }
+        }
+        if !done {
+            break;
+        }
+    }
+
+    tasks
+        .iter()
+        .filter(|task| task.now != task.from)
+        .map(|task| task.now.clone())
+        .collect()
+}
+
+/// 拼接批量重命名的错误提示
+fn rename_err_msg(action: &str, err: RenameErr) -> String {
+    let mut msg = format!("以下文件{}失败：{}", action, err.failed.join("、"));
+    if !err.note.is_empty() {
+        msg.push_str(&format!("（{}）", err.note));
+    }
+    if err.rollback_failed.is_empty() {
+        msg.push_str("（已自动回滚，文件保持操作前的状态）");
+    } else {
+        msg.push_str(&format!(
+            "；以下文件未能回滚，请手动处理：{}",
+            err.rollback_failed.join("、")
+        ));
+    }
+    msg
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use super::*;
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("format_name_test_{}_{}", tag, nanos))
+    }
+
+    fn touch(dir: &Path, name: &str) {
+        std::fs::create_dir_all(dir).unwrap();
+        // 文件内容写成自己的名字，方便判断有没有被覆盖
+        std::fs::write(dir.join(name), name).unwrap();
+    }
+
+    fn read(dir: &Path, name: &str) -> String {
+        std::fs::read_to_string(dir.join(name)).unwrap()
+    }
+
+    #[test]
+    fn rename_all_files() {
+        let dir = temp_dir("rename_all");
+        touch(&dir, "a.txt");
+        touch(&dir, "b.txt");
+        rename_atomic(&dir, &[("a.txt", "A.txt"), ("b.txt", "B.txt")]).unwrap();
+        assert_eq!(list_files(&dir).unwrap(), vec!["A.txt", "B.txt"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_chain_keeps_both_files() {
+        let dir = temp_dir("rename_chain");
+        touch(&dir, "a.txt");
+        touch(&dir, "b.txt");
+        // 旧名字正好是另一个任务的新名字，两个文件都必须留下
+        rename_atomic(&dir, &[("a.txt", "b.txt"), ("b.txt", "c.txt")]).unwrap();
+        assert_eq!(list_files(&dir).unwrap(), vec!["b.txt", "c.txt"]);
+        assert_eq!(read(&dir, "b.txt"), "a.txt");
+        assert_eq!(read(&dir, "c.txt"), "b.txt");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_swap_files() {
+        let dir = temp_dir("rename_swap");
+        touch(&dir, "a.txt");
+        touch(&dir, "b.txt");
+        rename_atomic(&dir, &[("a.txt", "b.txt"), ("b.txt", "a.txt")]).unwrap();
+        assert_eq!(read(&dir, "a.txt"), "b.txt");
+        assert_eq!(read(&dir, "b.txt"), "a.txt");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_refuses_to_overwrite() {
+        let dir = temp_dir("rename_overwrite");
+        touch(&dir, "a.txt");
+        touch(&dir, "占用.txt");
+        // 目标名字被无关文件占着，不能覆盖它
+        rename_atomic(&dir, &[("a.txt", "占用.txt")]).unwrap_err();
+        assert_eq!(read(&dir, "占用.txt"), "占用.txt");
+        assert_eq!(read(&dir, "a.txt"), "a.txt");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_rolls_back_on_failure() {
+        let dir = temp_dir("rename_rollback");
+        touch(&dir, "a.txt");
+        touch(&dir, "b.txt");
+        touch(&dir, "占用.txt");
+        // a.txt 能改成 A.txt，b.txt 会覆盖掉无关的「占用.txt」，整批应当失败并回滚
+        let err = rename_atomic(&dir, &[("a.txt", "A.txt"), ("b.txt", "占用.txt")]).unwrap_err();
+        assert_eq!(err.failed, vec!["b.txt"]);
+        assert!(err.rollback_failed.is_empty());
+        // 已经改成功的 a.txt 应被改回去，目录保持原样
+        assert_eq!(
+            list_files(&dir).unwrap(),
+            vec!["a.txt", "b.txt", "占用.txt"]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
