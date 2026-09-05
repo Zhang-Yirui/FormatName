@@ -3,8 +3,14 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, CopyDocument, DataAnalysis, Refresh } from '@element-plus/icons-vue'
-import { backup, getExecute, recover, rename } from '@/api'
+import {
+  ArrowLeft,
+  CopyDocument,
+  DataAnalysis,
+  Refresh,
+  RefreshRight,
+} from '@element-plus/icons-vue'
+import { backup, getExecute, recover, rename, rescan } from '@/api'
 import type { NamePair } from '@/types'
 
 const router = useRouter()
@@ -15,18 +21,19 @@ const oldNames = ref<string[]>([])
 const map = ref<number[]>([])
 const flag = ref(0)
 const loading = ref(false)
+const refreshing = ref(false)
 
-/** 没交: 一次都没匹配到 */
+/** 没交（一次都没匹配到） */
 const missing = computed(() =>
     newNames.value.filter((_, i) => (map.value[i] ?? 0) === 0),
 )
 
-/** 多交: 同一个名字匹配到多次 */
+/** 多交（同一个名字匹配到多次） */
 const duplicated = computed(() =>
     newNames.value.filter((_, i) => (map.value[i] ?? 0) > 1),
 )
 
-/** 未知: 没有匹配上任何关键字的旧文件 */
+/** 未知（没有匹配上任何关键字的旧文件） */
 const unknown = computed(() => {
   const matched = new Set(list.value.map((i) => i.old))
   return oldNames.value.filter((name) => !matched.has(name))
@@ -42,6 +49,24 @@ async function load() {
     flag.value = res.flag
   } catch (e) {
     ElMessage.error(`获取数据失败：${e}`)
+  }
+}
+
+/** 重新扫描目录：目录里的文件在程序外被改动后用它刷新分析结果 */
+async function doRefresh() {
+  refreshing.value = true
+  try {
+    const res = await rescan()
+    if (res.code !== 0) {
+      ElMessage.error(res.msg)
+      return
+    }
+    await load()
+    ElMessage.success(res.msg)
+  } catch (e) {
+    ElMessage.error(`刷新失败：${e}`)
+  } finally {
+    refreshing.value = false
   }
 }
 
@@ -229,7 +254,16 @@ onMounted(load)
         <el-button v-if="flag === 0" size="large" :loading="loading" @click="doBackup">
           备份并改名
         </el-button>
-        <el-button size="large" text @click="load">刷新</el-button>
+        <el-button
+            size="large"
+            text
+            :icon="RefreshRight"
+            :loading="refreshing"
+            title="重新扫描目录并重新计算匹配结果"
+            @click="doRefresh"
+        >
+          刷新
+        </el-button>
       </div>
     </el-card>
   </div>

@@ -163,6 +163,35 @@ pub fn submit_execute(path: String, execute: Vec<ExecuteItem>, state: State<AppS
         Err(e) => return ApiResp::err(6, format!("读取目录失败：{}", e)),
     };
 
+    let (keywords, new, map, list) = match build_execute(&data, &execute, &old) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+
+    let mut guard = state.execute.lock().unwrap();
+    *guard = crate::model::Execute {
+        flag: 0,
+        path: path.clone(),
+        execute,
+        data: keywords,
+        new,
+        map,
+        old,
+        list,
+    };
+    drop(guard);
+
+    ApiResp::ok("提交成功")
+}
+
+/// 根据表格数据、命名格式和目录中的文件名，计算新名字与新旧名字对照
+///
+/// 返回 `(排序后的关键字, 新名字列表, 每个名字的匹配次数, 新旧名字对照表)`
+fn build_execute(
+    data: &[ColData],
+    execute: &[ExecuteItem],
+    old: &[String],
+) -> Result<(Vec<ColData>, Vec<String>, Vec<i32>, Vec<NamePair>), ApiResp> {
     // 为关键字排序：重复次数越少优先级越高
     let mut keywords: Vec<ColData> = data.iter().filter(|c| c.is_key_word).cloned().collect();
     keywords.sort_by_key(|c| c.delta);
@@ -172,7 +201,7 @@ pub fn submit_execute(path: String, execute: Vec<ExecuteItem>, state: State<AppS
     let mut new: Vec<String> = Vec::with_capacity(rows);
     for i in 0..rows {
         let mut name = String::new();
-        for item in &execute {
+        for item in execute {
             match item {
                 ExecuteItem::Index(j) => {
                     let value = data
@@ -196,7 +225,7 @@ pub fn submit_execute(path: String, execute: Vec<ExecuteItem>, state: State<AppS
     // 匹配新旧名字
     let mut map = vec![0i32; rows];
     let mut list: Vec<NamePair> = Vec::new();
-    for old_name in &old {
+    for old_name in old {
         let suffix = last_name(old_name);
         let mut found = false;
         for kw in &keywords {
@@ -228,24 +257,11 @@ pub fn submit_execute(path: String, execute: Vec<ExecuteItem>, state: State<AppS
     // 查询新名字中是否包含非法字符
     for name in &new {
         if invalid_char_re().is_match(name) {
-            return ApiResp::err(5, "新文件名中会包含不允许使用的字符");
+            return Err(ApiResp::err(5, "新文件名中会包含不允许使用的字符"));
         }
     }
 
-    let mut guard = state.execute.lock().unwrap();
-    *guard = crate::model::Execute {
-        flag: 0,
-        path: path.clone(),
-        execute,
-        data: keywords,
-        new,
-        map,
-        old,
-        list,
-    };
-    drop(guard);
-
-    ApiResp::ok("提交成功")
+    Ok((keywords, new, map, list))
 }
 
 fn list_files(dir: &Path) -> Result<Vec<String>, String> {
@@ -272,6 +288,65 @@ pub fn get_execute(state: State<AppState>) -> ExecuteResp {
         old: guard.old.clone(),
         flag: guard.flag,
     }
+}
+
+/// 重新扫描目录并重新计算新旧名字对照
+///
+/// 目录里的文件在程序之外被增删改后，用它刷新分析结果
+///
+/// 返回值：
+/// - 0：刷新成功
+/// - 1：已经改过名了，请先恢复原文件名
+/// - 3：尚未提交目录，或目录已不存在
+/// - 4：尚未导入 Excel 数据
+/// - 5：新文件名中会包含不允许使用的字符
+/// - 6：目录读取失败
+#[tauri::command]
+pub fn rescan(state: State<AppState>) -> ApiResp {
+    let (flag, path, execute) = {
+        let guard = state.execute.lock().unwrap();
+        (guard.flag, guard.path.clone(), guard.execute.clone())
+    };
+    if flag != 0 {
+        return ApiResp::err(1, "已经改过名了，请先恢复原文件名再刷新");
+    }
+    if path.is_empty() {
+        return ApiResp::err(3, "请先提交要改名的文件夹");
+    }
+    let dir = PathBuf::from(&path);
+    if !dir.is_dir() {
+        return ApiResp::err(3, "目录已不存在，请重新提交文件夹");
+    }
+
+    let data = state.get_config().data;
+    if data.is_empty() {
+        return ApiResp::err(4, "请先导入 Excel 数据");
+    }
+
+    let old = match list_files(&dir) {
+        Ok(v) => v,
+        Err(e) => return ApiResp::err(6, format!("读取目录失败：{}", e)),
+    };
+
+    let (keywords, new, map, list) = match build_execute(&data, &execute, &old) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let total = old.len();
+    let matched = list.len();
+
+    let mut guard = state.execute.lock().unwrap();
+    guard.data = keywords;
+    guard.new = new;
+    guard.map = map;
+    guard.old = old;
+    guard.list = list;
+    drop(guard);
+
+    ApiResp::ok(format!(
+        "已重新扫描：共 {} 个文件，匹配到 {} 个",
+        total, matched
+    ))
 }
 
 /// 发起重命名

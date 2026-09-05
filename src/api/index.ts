@@ -21,6 +21,9 @@ export const submitExecute = (path: string, execute: ExecuteItem[]) =>
 /** 获取本次改名的操作以及新旧名字 */
 export const getExecute = () => invoke<ExecuteResp>('get_execute')
 
+/** 重新扫描目录并重新计算新旧名字对照 */
+export const rescan = () => invoke<ApiResp>('rescan')
+
 /** 发起重命名 */
 export const rename = () => invoke<ApiResp>('rename')
 

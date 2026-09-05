@@ -40,11 +40,12 @@ pub fn run() {
             command::submit_data,
             command::submit_execute,
             command::get_execute,
+            command::rescan,
             command::rename,
             command::recover,
             command::backup,
             command::clear_data,
         ])
         .run(tauri::generate_context!())
-        .expect("启动 Format Name 失败");
+        .expect("启动 FormatName 失败");
 }
