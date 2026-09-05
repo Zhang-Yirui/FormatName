@@ -47,7 +47,7 @@ onMounted(async () => {
 
 <template>
   <el-container class="flex h-full flex-col bg-slate-50 text-slate-800">
-    <el-header class="relative flex w-full shrink-0 items-center bg-blue-500 px-6 py-3 text-neutral-900 shadow-md">
+    <el-header class="relative flex w-full h-auto shrink-0 items-center bg-blue-500 px-6 py-3 text-neutral-900 shadow-md">
       <span class="text-center text-3xl font-bold tracking-wide fn-header__title" @click="openLink(appInfo.repository)">
         {{ appInfo.name }}
       </span>
