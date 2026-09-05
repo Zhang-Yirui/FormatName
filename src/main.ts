@@ -1,4 +1,4 @@
-import { createApp } from "vue";
+import {createApp} from "vue";
 import AppVue from "./App.vue";
 
 import ElementPlus from 'element-plus'
@@ -10,5 +10,5 @@ import router from './router'
 
 createApp(AppVue)
     .use(router)
-    .use(ElementPlus, { locale: zhCn })
+    .use(ElementPlus, {locale: zhCn})
     .mount('#app')

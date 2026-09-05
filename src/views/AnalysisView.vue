@@ -1,17 +1,11 @@
-<script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  ArrowLeft,
-  CopyDocument,
-  DataAnalysis,
-  Refresh,
-  RefreshRight,
-} from '@element-plus/icons-vue'
-import { backup, getExecute, recover, rename, rescan } from '@/api'
-import { copyText } from '@/utils/clipboard'
-import type { NamePair } from '@/types'
+<script lang="ts" setup>
+import {computed, onMounted, ref} from 'vue'
+import {useRouter} from 'vue-router'
+import {ElMessage, ElMessageBox} from 'element-plus'
+import {ArrowLeft, CopyDocument, DataAnalysis, Refresh, RefreshRight,} from '@element-plus/icons-vue'
+import {backup, getExecute, recover, rename, rescan} from '@/api'
+import {copyText} from '@/utils/clipboard'
+import type {NamePair} from '@/types'
 
 const router = useRouter()
 
@@ -60,7 +54,7 @@ async function doRefresh() {
       await ElMessageBox.confirm(
           '将重新扫描目录：新放进来的文件会被立即改名，已经不在目录里的文件会从对照表中移除（无法再恢复）。是否继续？',
           '重新扫描',
-          { type: 'warning', confirmButtonText: '继续扫描', cancelButtonText: '取消' },
+          {type: 'warning', confirmButtonText: '继续扫描', cancelButtonText: '取消'},
       )
     } catch {
       return
@@ -148,11 +142,13 @@ onMounted(load)
 
 <template>
   <div class="mx-auto w-[90vw]">
-    <el-card shadow="never" class="!rounded-2xl">
+    <el-card class="!rounded-2xl" shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2 text-lg font-semibold text-brand">
-            <el-icon><DataAnalysis /></el-icon>
+            <el-icon>
+              <DataAnalysis/>
+            </el-icon>
             <span>第四步：数据分析</span>
           </div>
           <el-tag :type="flag === 0 ? 'info' : 'success'" effect="dark" round>
@@ -167,13 +163,13 @@ onMounted(load)
           <h3 class="mb-2 text-sm font-semibold text-slate-600">
             新旧名字对照（{{ list.length }} 个文件）
           </h3>
-          <el-table :data="list" border stripe max-height="420">
-            <el-table-column prop="old" label="旧名字" min-width="200" show-overflow-tooltip>
+          <el-table :data="list" border max-height="420" stripe>
+            <el-table-column label="旧名字" min-width="200" prop="old" show-overflow-tooltip>
               <template #default="{ row }">
                 <span class="whitespace-pre">{{ row.old }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="new" label="新名字" min-width="200" show-overflow-tooltip>
+            <el-table-column label="新名字" min-width="200" prop="new" show-overflow-tooltip>
               <template #default="{ row }">
                 <span class="whitespace-pre text-brand">{{ row.new }}</span>
               </template>
@@ -186,7 +182,7 @@ onMounted(load)
           <div>
             <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600">
               没交
-              <el-tag size="small" type="danger" effect="dark" round>
+              <el-tag effect="dark" round size="small" type="danger">
                 {{ missing.length }}
               </el-tag>
             </h3>
@@ -199,7 +195,9 @@ onMounted(load)
                     @click="copy(name)"
                 >
                   <span class="whitespace-pre">{{ name }}</span>
-                  <el-icon><CopyDocument /></el-icon>
+                  <el-icon>
+                    <CopyDocument/>
+                  </el-icon>
                 </li>
                 <li v-if="missing.length === 0" class="px-3 text-xs text-slate-400">无</li>
               </ul>
@@ -209,7 +207,7 @@ onMounted(load)
           <div>
             <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600">
               多交
-              <el-tag size="small" type="warning" effect="dark" round>
+              <el-tag effect="dark" round size="small" type="warning">
                 {{ duplicated.length }}
               </el-tag>
             </h3>
@@ -222,7 +220,9 @@ onMounted(load)
                     @click="copy(name)"
                 >
                   <span class="whitespace-pre">{{ name }}</span>
-                  <el-icon><CopyDocument /></el-icon>
+                  <el-icon>
+                    <CopyDocument/>
+                  </el-icon>
                 </li>
                 <li v-if="duplicated.length === 0" class="px-3 text-xs text-slate-400">无</li>
               </ul>
@@ -232,7 +232,7 @@ onMounted(load)
           <div>
             <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600">
               未知
-              <el-tag size="small" type="info" effect="dark" round>
+              <el-tag effect="dark" round size="small" type="info">
                 {{ unknown.length }}
               </el-tag>
             </h3>
@@ -245,7 +245,9 @@ onMounted(load)
                     @click="copy(name)"
                 >
                   <span class="whitespace-pre">{{ name }}</span>
-                  <el-icon><CopyDocument /></el-icon>
+                  <el-icon>
+                    <CopyDocument/>
+                  </el-icon>
                 </li>
                 <li v-if="unknown.length === 0" class="px-3 text-xs text-slate-400">无</li>
               </ul>
@@ -257,21 +259,21 @@ onMounted(load)
       </div>
 
       <div class="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
-        <el-button size="large" :icon="ArrowLeft" @click="router.push('/format')">返回</el-button>
-        <el-button v-if="flag === 0" type="primary" size="large" :loading="loading" @click="doRename">
+        <el-button :icon="ArrowLeft" size="large" @click="router.push('/format')">返回</el-button>
+        <el-button v-if="flag === 0" :loading="loading" size="large" type="primary" @click="doRename">
           改名
         </el-button>
-        <el-button v-else type="danger" size="large" :icon="Refresh" :loading="loading" @click="doRecover">
+        <el-button v-else :icon="Refresh" :loading="loading" size="large" type="danger" @click="doRecover">
           恢复
         </el-button>
-        <el-button v-if="flag === 0" size="large" :loading="loading" @click="doBackup">
+        <el-button v-if="flag === 0" :loading="loading" size="large" @click="doBackup">
           备份并改名
         </el-button>
         <el-button
-            size="large"
-            text
             :icon="RefreshRight"
             :loading="refreshing"
+            size="large"
+            text
             title="重新扫描目录并重新计算匹配结果（改名后刷新会立即处理新放入的文件）"
             @click="doRefresh"
         >

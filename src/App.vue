@@ -1,11 +1,16 @@
-<script setup lang="ts">
+<script lang="ts" setup>
 import {computed, onMounted, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {openUrl} from '@tauri-apps/plugin-opener'
 import {ElMessage} from 'element-plus'
 import {getAppInfo} from '@/api'
 import {
-  IconHelpHexagon, IconHexagonNumber1, IconHexagonNumber2, IconHexagonNumber3, IconHexagonNumber4, IconInfoHexagon,
+  IconHelpHexagon,
+  IconHexagonNumber1,
+  IconHexagonNumber2,
+  IconHexagonNumber3,
+  IconHexagonNumber4,
+  IconInfoHexagon,
   IconMoon,
   IconSun,
 } from '@tabler/icons-vue';
@@ -91,14 +96,14 @@ onMounted(async () => {
       </div>
     </el-header>
     <nav class="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
-      <el-steps :active="activeStep" finish-status="success" align-center class="fn-steps">
+      <el-steps :active="activeStep" align-center class="fn-steps" finish-status="success">
         <el-step
             v-for="(step, index) in steps"
             :key="step.path"
-            :title="step.title"
+            :class="unlocked(index) ? 'is-clickable' : 'is-locked'"
             :description="step.description"
             :icon="tablerIcon(step.icon)"
-            :class="unlocked(index) ? 'is-clickable' : 'is-locked'"
+            :title="step.title"
             @click="onStepClick(index)"
         />
       </el-steps>

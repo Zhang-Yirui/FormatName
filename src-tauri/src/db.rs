@@ -232,5 +232,4 @@ mod tests {
         assert!(db.load_execute().unwrap().is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
-
 }

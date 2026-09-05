@@ -1,5 +1,5 @@
-import { h, type Component } from 'vue'
-import { ElIcon } from 'element-plus'
+import {type Component, h} from 'vue'
+import {ElIcon} from 'element-plus'
 
 interface IconOptions {
     size?: number | string

@@ -9,63 +9,63 @@
    justify-content / background 会压过 justify-center / bg-blue-500。 */
 
 @layer base {
-  :root {
-    /* Element Plus 主题色蓝色系 */
-    --el-color-primary: #409eff;
-    --el-color-primary-light-3: #66b1ff;
-    --el-color-primary-light-5: #8cc5ff;
-    --el-color-primary-light-7: #b3d8ff;
-    --el-color-primary-light-8: #c6e2ff;
-    --el-color-primary-light-9: #ecf5ff;
-    --el-color-primary-dark-2: #337ecc;
-  }
+    :root {
+        /* Element Plus 主题色蓝色系 */
+        --el-color-primary: #409eff;
+        --el-color-primary-light-3: #66b1ff;
+        --el-color-primary-light-5: #8cc5ff;
+        --el-color-primary-light-7: #b3d8ff;
+        --el-color-primary-light-8: #c6e2ff;
+        --el-color-primary-light-9: #ecf5ff;
+        --el-color-primary-dark-2: #337ecc;
+    }
 
-  html,
-  body,
-  #app {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-  }
+    html,
+    body,
+    #app {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
 
-  body {
-    font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
-  }
+    body {
+        font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+    }
 
-  /* 注意：.el-header/.el-main 自带 padding、height（见 element-plus 的
-     --el-header-padding / --el-header-height / --el-main-padding），
-     由于组件库样式在本文件之后加载，这些默认值会胜出；
-     需要改高度/内边距时请直接用 Tailwind 工具类，如 h-[50px]、p-6。 */
-  .el-header {
-    box-sizing: border-box;
-    display: flex;
-    width: 100%;
-    height: 50px;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 40px;
-    border-bottom: 1px solid rgba(0, 18, 38, 0.06);
-    background: rgba(251, 251, 251, 1);
-    user-select: none;
-    -webkit-user-select: none;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
-  }
+    /* 注意：.el-header/.el-main 自带 padding、height（见 element-plus 的
+       --el-header-padding / --el-header-height / --el-main-padding），
+       由于组件库样式在本文件之后加载，这些默认值会胜出；
+       需要改高度/内边距时请直接用 Tailwind 工具类，如 h-[50px]、p-6。 */
+    .el-header {
+        box-sizing: border-box;
+        display: flex;
+        width: 100%;
+        height: 50px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 40px;
+        border-bottom: 1px solid rgba(0, 18, 38, 0.06);
+        background: rgba(251, 251, 251, 1);
+        user-select: none;
+        -webkit-user-select: none;
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
 }
 
 @layer components {
-  /* 被选为关键字的表头 */
-  .el-table .keyword-header {
-    background-color: #409eff !important;
-    color: #ffffff !important;
-  }
+    /* 被选为关键字的表头 */
+    .el-table .keyword-header {
+        background-color: #409eff !important;
+        color: #ffffff !important;
+    }
 
-  .el-table .keyword-header .cell {
-    color: #ffffff !important;
-  }
+    .el-table .keyword-header .cell {
+        color: #ffffff !important;
+    }
 
-  /* 表头单元格可点击 */
-  .el-table th.el-table__cell {
-    cursor: pointer;
-    user-select: none;
-  }
+    /* 表头单元格可点击 */
+    .el-table th.el-table__cell {
+        cursor: pointer;
+        user-select: none;
+    }
 }

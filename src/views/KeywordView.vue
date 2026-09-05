@@ -1,17 +1,17 @@
-<script setup lang="ts">
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { ArrowLeft, Key, Select } from '@element-plus/icons-vue'
-import { submitData } from '@/api'
-import { columns } from '@/store'
+<script lang="ts" setup>
+import {computed} from 'vue'
+import {useRouter} from 'vue-router'
+import {ElMessage} from 'element-plus'
+import {ArrowLeft, Key, Select} from '@element-plus/icons-vue'
+import {submitData} from '@/api'
+import {columns} from '@/store'
 
 const router = useRouter()
 
 /** 把列数据转换成 el-table 需要的行数据 */
 const rows = computed(() => {
   const size = columns.value[0]?.values.length ?? 0
-  return Array.from({ length: size }, (_, i) => {
+  return Array.from({length: size}, (_, i) => {
     const row: Record<string, string> = {}
     columns.value.forEach((col, j) => {
       row[String(j)] = col.values[i] ?? ''
@@ -22,7 +22,7 @@ const rows = computed(() => {
 
 const keywordCount = computed(() => columns.value.filter((c) => c.isKeyWord).length)
 
-function headerClassName({ column }: { column: { property?: string } }) {
+function headerClassName({column}: { column: { property?: string } }) {
   const index = Number(column?.property)
   const col = columns.value[index]
   if (!col?.isKeyWord) return ''
@@ -57,47 +57,49 @@ async function submit() {
 
 <template>
   <div class="mx-auto flex h-full w-[90vw] flex-col">
-    <el-card shadow="never" class="!rounded-2xl" body-class="!p-4">
+    <el-card body-class="!p-4" class="!rounded-2xl" shadow="never">
       <template #header>
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2 text-lg font-semibold text-brand">
-            <el-icon><Key /></el-icon>
+            <el-icon>
+              <Key/>
+            </el-icon>
             <span>第二步：选择关键字</span>
           </div>
-          <el-tag type="primary" effect="dark" round>
+          <el-tag effect="dark" round type="primary">
             已选 {{ keywordCount }} / {{ columns.length }}
           </el-tag>
         </div>
       </template>
 
       <el-alert
-          type="info"
           :closable="false"
+          class="mb-4"
           show-icon
           title="点击表头可以选择关键字，鼠标悬停在表头上可查看不能作为关键字的原因"
-          class="mb-4"
+          type="info"
       />
 
       <el-table
           :data="rows"
-          border
-          stripe
-          max-height="460"
           :header-cell-class-name="headerClassName"
+          border
+          max-height="460"
+          stripe
           @header-click="toggleHeader"
       >
         <el-table-column
             v-for="(col, index) in columns"
             :key="index"
-            :prop="String(index)"
             :label="col.key"
+            :prop="String(index)"
             min-width="140"
         >
           <template #header>
-            <el-tooltip :content="col.reason" placement="top" effect="dark">
+            <el-tooltip :content="col.reason" effect="dark" placement="top">
               <span class="inline-flex items-center gap-1">
                 <span>{{ col.key }}</span>
-                <el-tag v-if="!col.display" size="small" type="danger" effect="dark">
+                <el-tag v-if="!col.display" effect="dark" size="small" type="danger">
                   非法字符
                 </el-tag>
               </span>
@@ -110,8 +112,8 @@ async function submit() {
       </el-table>
 
       <div class="mt-5 flex items-center gap-3">
-        <el-button size="large" :icon="ArrowLeft" @click="router.push('/excel')">返回</el-button>
-        <el-button type="primary" size="large" :icon="Select" @click="submit">提交</el-button>
+        <el-button :icon="ArrowLeft" size="large" @click="router.push('/excel')">返回</el-button>
+        <el-button :icon="Select" size="large" type="primary" @click="submit">提交</el-button>
       </div>
     </el-card>
   </div>

@@ -1,5 +1,5 @@
-import { isTauri } from '@tauri-apps/api/core'
-import { writeText as tauriWriteText } from '@tauri-apps/plugin-clipboard-manager'
+import {isTauri} from '@tauri-apps/api/core'
+import {writeText as tauriWriteText} from '@tauri-apps/plugin-clipboard-manager'
 
 /** 浏览器环境的兜底复制 */
 async function webWriteText(text: string): Promise<void> {

@@ -1,5 +1,5 @@
+use crate::{APP_NAME, AUTHORS, DESCRIPTION, HOMEPAGE, LICENSE, REPOSITORY, VERSION};
 use serde::{Deserialize, Serialize};
-use crate::{APP_NAME, VERSION, DESCRIPTION, AUTHORS, LICENSE, REPOSITORY, HOMEPAGE,};
 
 /// 表格中的一列数据（对应 Python 版本 Excel_List.return_col_data 的返回值）
 ///

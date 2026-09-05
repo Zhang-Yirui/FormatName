@@ -1,12 +1,12 @@
-<script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { open } from '@tauri-apps/plugin-dialog'
-import { getCurrentWebview } from '@tauri-apps/api/webview'
-import { ElMessage } from 'element-plus'
-import { Document, FolderOpened, Right } from '@element-plus/icons-vue'
-import { submitExcelPath } from '@/api'
-import { columns, loadColumns, resetStep } from '@/store'
+<script lang="ts" setup>
+import {onMounted, onUnmounted, ref} from 'vue'
+import {useRouter} from 'vue-router'
+import {open} from '@tauri-apps/plugin-dialog'
+import {getCurrentWebview} from '@tauri-apps/api/webview'
+import {ElMessage} from 'element-plus'
+import {Document, FolderOpened, Right} from '@element-plus/icons-vue'
+import {submitExcelPath} from '@/api'
+import {columns, loadColumns, resetStep} from '@/store'
 
 /** 允许的 Excel 扩展名 */
 const EXCEL_EXT = ['xlsx', 'xlsm', 'xltx', 'xltm']
@@ -89,7 +89,7 @@ onMounted(async () => {
 
   // 监听 Tauri 原生文件拖拽事件（可以拿到文件的完整路径）
   try {
-    unlistenDragDrop = await getCurrentWebview().onDragDropEvent(({ payload }) => {
+    unlistenDragDrop = await getCurrentWebview().onDragDropEvent(({payload}) => {
       if (payload.type === 'enter' || payload.type === 'over') {
         dragging.value = true
       } else if (payload.type === 'drop') {
@@ -114,38 +114,40 @@ onUnmounted(() => unlistenDragDrop?.())
 
 <template>
   <div class="mx-auto w-[90vw]">
-    <el-card shadow="never" class="!rounded-2xl">
+    <el-card class="!rounded-2xl" shadow="never">
       <template #header>
         <div class="flex items-center gap-2 text-lg font-semibold text-brand">
-          <el-icon><Document /></el-icon>
+          <el-icon>
+            <Document/>
+          </el-icon>
           <span>第一步：选择 Excel 花名册</span>
         </div>
       </template>
 
       <el-alert
-          type="info"
           :closable="false"
+          class="mb-5"
           show-icon
           title="表格第一行为表头，第二行开始为数据，表头将作为关键字"
-          class="mb-5"
+          type="info"
       />
 
       <!-- 文件路径输入 + 浏览按钮（也可把文件拖到这里） -->
       <div
-          class="path-row"
           :class="{ 'is-dragover': dragging }"
+          class="path-row"
           @dragover.prevent="dragging = true"
           @dragleave.prevent="dragging = false"
           @drop.prevent="onDrop"
       >
         <el-input
             v-model="path"
-            size="large"
-            placeholder="请选择、粘贴 Excel 文件路径，或将文件拖拽到此处"
             clearable
+            placeholder="请选择、粘贴 Excel 文件路径，或将文件拖拽到此处"
+            size="large"
             @keyup.enter="submit"
         />
-        <el-button size="large" :icon="FolderOpened" @click="pickFile">浏览</el-button>
+        <el-button :icon="FolderOpened" size="large" @click="pickFile">浏览</el-button>
       </div>
 
       <p class="hint">
@@ -153,14 +155,14 @@ onUnmounted(() => unlistenDragDrop?.())
       </p>
 
       <div class="actions">
-        <el-button type="primary" size="large" :loading="loading" @click="submit">
+        <el-button :loading="loading" size="large" type="primary" @click="submit">
           提交
         </el-button>
         <el-button
             v-if="hasCache"
-            type="success"
-            size="large"
             :icon="Right"
+            size="large"
+            type="success"
             @click="router.push('/format')"
         >
           继续使用上次的数据
@@ -178,9 +180,8 @@ onUnmounted(() => unlistenDragDrop?.())
   padding: 0.25rem;
   border: 1px dashed transparent;
   border-radius: 0.75rem;
-  transition:
-      background-color 0.2s ease,
-      border-color 0.2s ease;
+  transition: background-color 0.2s ease,
+  border-color 0.2s ease;
 }
 
 .path-row.is-dragover {
