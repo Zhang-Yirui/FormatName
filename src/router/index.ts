@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory, RouteLocationNormalized } from 'vue-router'
-import { loadColumns } from '@/store'
+import { loadColumns, reachStep } from '@/store'
 import ExcelView from '@/views/ExcelView.vue'
 import KeywordView from '@/views/KeywordView.vue'
 import FormatView from '@/views/FormatView.vue'
@@ -25,6 +25,11 @@ router.beforeEach(async (to: RouteLocationNormalized) => {
         }
     }
     return true
+})
+
+// 记录到达过的最远步骤，步骤条据此判断哪些步骤可以点击跳转
+router.afterEach((to: RouteLocationNormalized) => {
+    reachStep(Number(to.meta.step ?? 0))
 })
 
 export default router

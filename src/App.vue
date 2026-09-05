@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from 'vue'
-import {useRoute} from 'vue-router'
+import {useRoute, useRouter} from 'vue-router'
 import {openUrl} from '@tauri-apps/plugin-opener'
+import {ElMessage} from 'element-plus'
 import {getAppInfo} from '@/api'
 import {
   IconHelpHexagon, IconHexagonNumber1, IconHexagonNumber2, IconHexagonNumber3, IconHexagonNumber4, IconInfoHexagon,
@@ -10,8 +11,10 @@ import {
 } from '@tabler/icons-vue';
 import {AppInfoResp} from "@/types";
 import {tablerIcon} from '@/utils/tablerIcon'
+import {maxStep} from '@/store'
 
 const route = useRoute()
+const router = useRouter()
 const dark = ref(false)
 const appInfo = ref<AppInfoResp>({
   name: "FormatName",
@@ -25,6 +28,29 @@ const appInfo = ref<AppInfoResp>({
 const aboutVisible = ref(false)
 
 const activeStep = computed(() => Number(route.meta.step ?? 0))
+
+/** 步骤条配置：顺序即步骤序号（0 起） */
+const steps = [
+  {title: '选择 Excel', description: '导入花名册', icon: IconHexagonNumber1, path: '/excel'},
+  {title: '选择关键字', description: '点击表头切换', icon: IconHexagonNumber2, path: '/keyword'},
+  {title: '设置命名格式', description: '自定义分隔符', icon: IconHexagonNumber3, path: '/format'},
+  {title: '数据分析', description: '改名 / 恢复 / 备份', icon: IconHexagonNumber4, path: '/analysis'},
+]
+
+/** 是否已解锁：只有到达过或更早的步骤可以点击跳转 */
+function unlocked(index: number): boolean {
+  return index <= maxStep.value
+}
+
+/** 点击步骤：之前的步骤直接跳转，之后的步骤提示先提交当前页面 */
+function onStepClick(index: number) {
+  if (index === activeStep.value) return
+  if (!unlocked(index)) {
+    ElMessage.warning('请先完成当前步骤，点击“提交”后才能进入后面的步骤')
+    return
+  }
+  router.push(steps[index].path)
+}
 
 async function openLink(url: string) {
   try {
@@ -47,8 +73,9 @@ onMounted(async () => {
 
 <template>
   <el-container class="flex h-full flex-col bg-slate-50 text-slate-800">
-    <el-header class="relative flex w-full h-auto shrink-0 items-center bg-blue-500 px-6 py-3 text-neutral-900 shadow-md">
-      <span class="text-center text-3xl font-bold tracking-wide fn-header__title" @click="openLink(appInfo.repository)">
+    <!-- h-auto：解除 Element Plus 对 .el-header 的 height:60px 锁定，否则 py-3 只压缩内容区、看不出效果 -->
+    <el-header class="relative flex w-full h-auto shrink-0 items-center bg-blue-500 px-6 py-3 text-white shadow-md">
+      <span class="text-center text-3xl font-bold tracking-wide fn-header-title" @click="openLink(appInfo.repository)">
         {{ appInfo.name }}
       </span>
       <div>
@@ -64,11 +91,16 @@ onMounted(async () => {
       </div>
     </el-header>
     <nav class="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
-      <el-steps :active="activeStep" finish-status="success" align-center>
-        <el-step title="选择 Excel" description="导入花名册" :icon="tablerIcon(IconHexagonNumber1, )"/>
-        <el-step title="选择关键字" description="点击表头切换" :icon="tablerIcon(IconHexagonNumber2, )"/>
-        <el-step title="设置命名格式" description="自定义分隔符" :icon="tablerIcon(IconHexagonNumber3, )"/>
-        <el-step title="数据分析" description="改名 / 恢复 / 备份" :icon="tablerIcon(IconHexagonNumber4, )"/>
+      <el-steps :active="activeStep" finish-status="success" align-center class="fn-steps">
+        <el-step
+            v-for="(step, index) in steps"
+            :key="step.path"
+            :title="step.title"
+            :description="step.description"
+            :icon="tablerIcon(step.icon)"
+            :class="unlocked(index) ? 'is-clickable' : 'is-locked'"
+            @click="onStepClick(index)"
+        />
       </el-steps>
     </nav>
     <el-main class="min-h-0 flex-1 overflow-auto p-6 fn-main">
@@ -99,18 +131,49 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* 主内容区占满剩余高度并自行滚动，内容从顶部开始排布 */
 .fn-main {
   min-height: 0;
   padding: 24px;
 }
 
-.fn-header__title {
+.fn-header-title {
   font-family: 'AlibabaPuHui', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
   font-weight: 700;
   font-style: normal;
   line-height: 27px;
   letter-spacing: 0;
   white-space: nowrap;
+}
+
+/* 步骤条：可达的步骤给出可点击的手型与悬停反馈，未解锁的步骤禁用点击 */
+.fn-steps :deep(.el-step.is-clickable) {
+  cursor: pointer;
+}
+
+.fn-steps :deep(.el-step.is-clickable:hover .el-step__title.is-process),
+.fn-steps :deep(.el-step.is-clickable:hover .el-step__title.is-wait),
+.fn-steps :deep(.el-step.is-clickable:hover .el-step__title.is-success),
+.fn-steps :deep(.el-step.is-clickable:hover .el-step__description) {
+  color: var(--el-color-primary);
+}
+
+.fn-steps :deep(.el-step.is-locked) {
+  cursor: not-allowed;
+}
+
+.fn-steps :deep(.el-step.is-locked .el-step__head),
+.fn-steps :deep(.el-step.is-locked .el-step__main)
+.fn-steps :deep(.el-step.is-locked .el-step__title),
+.fn-steps :deep(.el-step.is-locked .el-step__description) {
+  color: #c4c8d0;
+  opacity: 0.55;
+}
+
+/* 连接线是背景色，单独调浅，避免和文字深浅不一致 */
+.fn-steps :deep(.el-step.is-locked .el-step__line) {
+  background-color: #e4e7ed;
+  opacity: 0.55;
 }
 
 .el-step__icon svg {

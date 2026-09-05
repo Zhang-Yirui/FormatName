@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import {onMounted, onUnmounted, ref} from 'vue'
-import {useRouter} from 'vue-router'
-import {open} from '@tauri-apps/plugin-dialog'
-import {getCurrentWebview} from '@tauri-apps/api/webview'
-import {ElMessage} from 'element-plus'
-import {Document, FolderOpened, Right} from '@element-plus/icons-vue'
-import {submitExcelPath} from '@/api'
-import {columns, loadColumns} from '@/store'
+import { onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { open } from '@tauri-apps/plugin-dialog'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { ElMessage } from 'element-plus'
+import { Document, FolderOpened, Right } from '@element-plus/icons-vue'
+import { submitExcelPath } from '@/api'
+import { columns, loadColumns, resetStep } from '@/store'
 
 /** 允许的 Excel 扩展名 */
 const EXCEL_EXT = ['xlsx', 'xlsm', 'xltx', 'xltm']
@@ -23,7 +23,7 @@ let unlistenDragDrop: (() => void) | undefined
 function setPath(file: string) {
   const ext = file.slice(file.lastIndexOf('.') + 1).toLowerCase()
   if (!EXCEL_EXT.includes(ext)) {
-    ElMessage.warning(`请拖入 Excel 文件（支持的类型：${EXCEL_EXT.join(" / ")}）`)
+    ElMessage.warning('请拖入 Excel 文件（.xlsx / .xlsm / .xltx / .xltm）')
     return
   }
   path.value = file
@@ -69,6 +69,8 @@ async function submit() {
     if (res.code === 0) {
       ElMessage.success(res.msg)
       await loadColumns(true)
+      // 换了新的花名册，后面的步骤需要重新走一遍
+      resetStep(1)
       await router.push('/keyword')
     } else {
       ElMessage.error(res.msg)
@@ -85,25 +87,25 @@ onMounted(async () => {
   hasCache.value = data.length > 0
   if (data.length > 0) columns.value = data
 
-  // 监听 Tauri 原生文件拖拽事件(可以拿到文件的完整路径)
+  // 监听 Tauri 原生文件拖拽事件（可以拿到文件的完整路径）
   try {
-    unlistenDragDrop = await getCurrentWebview().onDragDropEvent(({payload}) => {
+    unlistenDragDrop = await getCurrentWebview().onDragDropEvent(({ payload }) => {
       if (payload.type === 'enter' || payload.type === 'over') {
         dragging.value = true
       } else if (payload.type === 'drop') {
         dragging.value = false
-        const file = payload.paths.find((p) => EXCEL_EXT.some((ext) => p.toLowerCase().endsWith(`.${ext}`)))
-        if (file) {
-          setPath(file)
-        } else if (payload.paths.length > 0) {
-          ElMessage.warning(`请拖入 Excel 文件（支持的类型：${EXCEL_EXT.join(" / ")}）`)
-        }
+        const file = payload.paths.find((p) =>
+            EXCEL_EXT.some((ext) => p.toLowerCase().endsWith(`.${ext}`)),
+        )
+        if (file) setPath(file)
+        else if (payload.paths.length > 0)
+          ElMessage.warning('请拖入 Excel 文件（.xlsx / .xlsm / .xltx / .xltm）')
       } else {
         dragging.value = false
       }
     })
   } catch {
-    /* 非 Tauri 环境(浏览器调试)忽略原生拖拽 */
+    /* 非 Tauri 环境（浏览器调试）忽略原生拖拽 */
   }
 })
 
@@ -115,9 +117,7 @@ onUnmounted(() => unlistenDragDrop?.())
     <el-card shadow="never" class="!rounded-2xl">
       <template #header>
         <div class="flex items-center gap-2 text-lg font-semibold text-brand">
-          <el-icon>
-            <Document/>
-          </el-icon>
+          <el-icon><Document /></el-icon>
           <span>第一步：选择 Excel 花名册</span>
         </div>
       </template>
@@ -171,7 +171,6 @@ onUnmounted(() => unlistenDragDrop?.())
 </template>
 
 <style scoped>
-/* 项目未配置 postcss/tailwind，工具类不会生效，这里用组件内样式保证布局 */
 .path-row {
   display: flex;
   align-items: center;
@@ -179,8 +178,9 @@ onUnmounted(() => unlistenDragDrop?.())
   padding: 0.25rem;
   border: 1px dashed transparent;
   border-radius: 0.75rem;
-  transition: background-color 0.2s ease,
-  border-color 0.2s ease;
+  transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease;
 }
 
 .path-row.is-dragover {
@@ -213,7 +213,6 @@ onUnmounted(() => unlistenDragDrop?.())
   margin-top: 1.5rem;
 }
 
-/* 覆盖 Element Plus 相邻按钮默认左边距，保证间距就是 1em */
 .actions .el-button + .el-button {
   margin-left: 0;
 }
