@@ -6,7 +6,7 @@ use chrono::Local;
 use regex::Regex;
 use tauri::State;
 
-use crate::excel::{invalid_char_re, load_range, SheetTable, ALLOWED_EXTS};
+use crate::excel::{invalid_char_re, load_range, sheet_from_text, SheetTable, ALLOWED_EXTS, TEXT_EXTS};
 use crate::model::{
     ApiResp, AppInfosResp, ColData, Config, ExecuteItem, ExecuteResp, NamePair,
 };
@@ -61,7 +61,50 @@ pub fn clear_data(state: State<AppState>) -> ApiResp {
 
 // ---------------------------------------------------------------- 第一步：Excel
 
-/// 提交 excel 的路径
+/// 读取文本文件（只支持 UTF-8，含 BOM）
+fn read_text_file(path: &str) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|e| format!("无法读取文件：{}", e))?;
+    let body = match bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
+        Some(rest) => rest,
+        None => bytes.as_slice(),
+    };
+    String::from_utf8(body.to_vec()).map_err(|_| {
+        "无法识别文件编码，请把文件另存为 UTF-8 编码后再导入（Excel 可选“CSV UTF-8”）".to_string()
+    })
+}
+
+/// 校验一张工作表并写入配置
+///
+/// 返回值：
+/// - 0：读取成功
+/// - 3：表格为空
+/// - 4：表格少于 2 行
+/// - 5：表头存在重复
+/// - 6：无法识别的表格格式
+fn save_sheet(mut sheet: SheetTable, state: &State<'_, AppState>) -> ApiResp {
+    let code = sheet.is_correct();
+
+    match code {
+        1 => {
+            let config = Config {
+                data: sheet.excel_data(),
+            };
+            if let Err(e) = state.set_config(config) {
+                return ApiResp::err(6, e);
+            }
+            if let Err(e) = state.reset_execute() {
+                return ApiResp::err(6, e);
+            }
+            ApiResp::ok("读取成功")
+        }
+        0 => ApiResp::err(3, "表格不能为空"),
+        -1 => ApiResp::err(4, "表格应至少有2行"),
+        2 => ApiResp::err(5, "表格表头存在重复"),
+        _ => ApiResp::err(6, "无法识别的表格格式"),
+    }
+}
+
+/// 提交表格文件的路径（Excel / CSV / Markdown）
 ///
 /// 返回值：
 /// - 0：读取成功
@@ -84,38 +127,38 @@ pub fn submit_excel_path(path: String, state: State<AppState>) -> ApiResp {
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase())
         .unwrap_or_default();
-    if !ALLOWED_EXTS.contains(&ext.as_str()) {
-        return ApiResp::err(
-            2,
-            "提交失败，不能读取该格式文件，请选择(.xlsx)(.xlsm)(.xltx)(.xltm)文件",
-        );
+
+    if ALLOWED_EXTS.contains(&ext.as_str()) {
+        let range = match load_range(&path) {
+            Ok(r) => r,
+            Err(e) => return ApiResp::err(6, e),
+        };
+        return save_sheet(SheetTable::new(range), &state);
     }
 
-    let range = match load_range(&path) {
-        Ok(r) => r,
-        Err(e) => return ApiResp::err(6, e),
-    };
-    let mut sheet = SheetTable::new(range);
-    let code = sheet.is_correct();
-
-    match code {
-        1 => {
-            let config = Config {
-                data: sheet.excel_data(),
-            };
-            if let Err(e) = state.set_config(config) {
-                return ApiResp::err(6, e);
-            }
-            if let Err(e) = state.reset_execute() {
-                return ApiResp::err(6, e);
-            }
-            ApiResp::ok("读取成功")
-        }
-        0 => ApiResp::err(3, "文件不能为空"),
-        -1 => ApiResp::err(4, "文件应至少有2行"),
-        2 => ApiResp::err(5, "文件表头存在重复"),
-        _ => ApiResp::err(6, "无法识别的表格格式"),
+    if TEXT_EXTS.contains(&ext.as_str()) {
+        let text = match read_text_file(&path) {
+            Ok(t) => t,
+            Err(e) => return ApiResp::err(6, e),
+        };
+        return save_sheet(sheet_from_text(&text), &state);
     }
+
+    ApiResp::err(
+        2,
+        "提交失败，不能读取该格式文件，请选择(.xlsx)(.xlsm)(.xltx)(.xltm)(.csv)(.json)文件",
+    )
+}
+
+/// 提交一段表格文本（粘贴的表格 / Markdown 表格）
+///
+/// 返回值与 [`submit_excel_path`] 相同，只是不检查文件是否存在
+#[tauri::command]
+pub fn submit_table_text(text: String, state: State<AppState>) -> ApiResp {
+    if text.trim().is_empty() {
+        return ApiResp::err(3, "内容不能为空");
+    }
+    save_sheet(sheet_from_text(&text), &state)
 }
 
 // ---------------------------------------------------------------- 第二步：关键字

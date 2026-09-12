@@ -11,6 +11,10 @@ export const getData = () => invoke<ColData[]>('get_data')
 export const submitExcelPath = (path: string) =>
     invoke<ApiResp>('submit_excel_path', {path})
 
+/** 提交表格文本 */
+export const submitTableText = (text: string) =>
+    invoke<ApiResp>('submit_table_text', {text})
+
 /** 提交关键字配置 */
 export const submitData = (data: ColData[]) => invoke<ApiResp>('submit_data', {data})
 

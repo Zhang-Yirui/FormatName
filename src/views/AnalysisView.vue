@@ -2,16 +2,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  ArrowLeft,
-  CopyDocument,
-  DataAnalysis,
-  Refresh,
-  RefreshRight,
-} from '@element-plus/icons-vue'
+import { ArrowLeft, CopyDocument, Refresh, RefreshRight } from '@element-plus/icons-vue'
 import { backup, getExecute, recover, rename, rescan } from '@/api'
 import { copyText } from '@/utils/clipboard'
 import type { NamePair } from '@/types'
+import {STEPS} from "@/constant";
 
 const router = useRouter()
 
@@ -152,20 +147,18 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="mx-auto w-[90vw]">
-    <el-card shadow="never" class="!rounded-2xl">
-      <template #header>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2 text-lg font-semibold text-brand">
-            <el-icon><DataAnalysis /></el-icon>
-            <span>第四步：数据分析</span>
-          </div>
-          <el-tag :type="flag === 0 ? 'info' : 'success'" effect="dark" round>
-            {{ flag === 0 ? '待改名' : '已改名' }}
-          </el-tag>
-        </div>
-      </template>
+  <div class="page-view">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">数据分析</h1>
+        <p class="page-desc">{{STEPS[3].hint}}</p>
+      </div>
+      <el-tag :type="flag === 0 ? 'info' : 'success'" effect="dark" round>
+        {{ flag === 0 ? '待改名' : '已改名' }}
+      </el-tag>
+    </div>
 
+    <el-card shadow="never" class="!rounded-2xl">
       <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <!-- 新旧名字对照 -->
         <div>

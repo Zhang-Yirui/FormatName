@@ -1,16 +1,17 @@
-<script lang="ts" setup>
-import {computed, ref, watch} from 'vue'
-import {useRouter} from 'vue-router'
-import {open} from '@tauri-apps/plugin-dialog'
-import {ElMessage} from 'element-plus'
-import {ArrowLeft, FolderOpened, MagicStick, RefreshRight} from '@element-plus/icons-vue'
-import {submitExecute} from '@/api'
-import {columns} from '@/store'
-import type {ExecuteItem} from '@/types'
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { open } from '@tauri-apps/plugin-dialog'
+import { ElMessage } from 'element-plus'
+import { ArrowLeft, FolderOpened, MagicStick, RefreshRight } from '@element-plus/icons-vue'
+import { submitExecute } from '@/api'
+import { columns } from '@/store'
+import type { ExecuteItem } from '@/types'
+import {STEPS} from "@/constant";
 
 const router = useRouter()
 
-/** 命名格式, 奇偶交替: 第 0/2/4... 项为字段, 第 1/3/5... 项为分隔符 */
+/** 命名格式，奇偶交替：第 0/2/4... 项为字段，第 1/3/5... 项为分隔符 */
 const picked = ref<ExecuteItem[]>(initPicked())
 /** 是否统一分隔符 */
 const same = ref(true)
@@ -25,9 +26,9 @@ function initPicked(): ExecuteItem[] {
 }
 
 const SEPARATORS: { label: string; value: string }[] = [
-  {label: '无', value: ''},
-  {label: '-', value: '-'},
-  {label: '空格', value: ' '},
+  { label: '无', value: '' },
+  { label: '-', value: '-' },
+  { label: '空格', value: ' ' },
 ]
 
 function applySep() {
@@ -60,7 +61,7 @@ function decrease() {
   }
 }
 
-/** 字段段显示用的自定义文本(字段序号不显示在输入框里) */
+/** 字段段显示用的自定义文本（字段序号不显示在输入框里） */
 function customText(index: number): string {
   const value = picked.value[index]
   return typeof value === 'number' ? '' : (value ?? '')
@@ -122,55 +123,51 @@ async function submit() {
 </script>
 
 <template>
-  <div class="mx-auto w-[90vw]">
-    <el-card class="!rounded-2xl" shadow="never">
-      <template #header>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2 text-lg font-semibold text-brand">
-            <el-icon>
-              <MagicStick/>
-            </el-icon>
-            <span>第三步：设置命名格式</span>
-          </div>
-          <el-button :icon="RefreshRight" text type="primary" @click="router.push('/excel')">
-            重新选择 Excel
-          </el-button>
-        </div>
-      </template>
+  <div class="page-view">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">{{STEPS[2].title}}</h1>
+        <p class="page-desc">{{STEPS[2].hint}}</p>
+      </div>
+      <el-button text type="primary" :icon="RefreshRight" @click="router.push('/excel')">
+        重新选择 Excel
+      </el-button>
+    </div>
 
+    <el-card shadow="never" class="!rounded-2xl">
       <!-- 格式片段 -->
       <div class="flex flex-wrap items-stretch gap-3">
         <template v-for="(_item, index) in picked" :key="index">
           <!-- 字段 -->
           <el-card
               v-if="index % 2 === 0"
-              body-class="!p-3"
-              class="w-56 !rounded-xl !border-brand/30"
               shadow="never"
+              class="w-56 !rounded-xl !border-brand/30"
+              body-class="!p-3"
           >
             <template #header>
               <div class="flex items-center justify-between">
                 <span class="text-xs font-semibold text-brand">
                   字段 {{ Math.floor(index / 2) + 1 }}
                 </span>
-                <el-tag effect="plain" size="small" type="info">表头</el-tag>
+                <el-tag size="small" type="info" effect="plain">表头</el-tag>
               </div>
             </template>
             <el-radio-group v-model="picked[index]" class="!flex !flex-col !items-start gap-1">
               <el-radio
                   v-for="(col, j) in columns"
                   :key="j"
-                  :disabled="!col.display"
                   :value="j"
+                  :disabled="!col.display"
               >
                 <span :class="{ 'text-slate-300': !col.display }">{{ col.key }}</span>
               </el-radio>
             </el-radio-group>
             <el-input
                 :model-value="customText(index)"
+                size="small"
                 class="mt-2"
                 placeholder="自定义文本"
-                size="small"
                 @update:model-value="(v: string) => setCustomText(index, v)"
             />
           </el-card>
@@ -178,9 +175,9 @@ async function submit() {
           <!-- 分隔符 -->
           <el-card
               v-else-if="!same"
-              body-class="!p-3"
-              class="w-40 !rounded-xl !border-slate-200"
               shadow="never"
+              class="w-40 !rounded-xl !border-slate-200"
+              body-class="!p-3"
           >
             <template #header>
               <span class="text-xs font-semibold text-slate-500">分隔符</span>
@@ -192,15 +189,15 @@ async function submit() {
             </el-radio-group>
             <el-input
                 v-model="picked[index]"
+                size="small"
                 class="mt-2"
                 placeholder="自定义"
-                size="small"
             />
           </el-card>
         </template>
 
         <div class="flex items-center gap-2 self-center">
-          <el-button :icon="MagicStick" circle title="增加一段" @click="increase"/>
+          <el-button :icon="MagicStick" circle title="增加一段" @click="increase" />
           <span class="text-sm text-slate-500">增加</span>
           <el-button circle title="减少一段" @click="decrease">－</el-button>
           <span class="text-sm text-slate-500">减少</span>
@@ -209,7 +206,7 @@ async function submit() {
 
       <!-- 统一分隔符 -->
       <div class="mt-5 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
-        <el-checkbox v-model="same" class="!mr-0" size="large">
+        <el-checkbox v-model="same" size="large" class="!mr-0">
           <span class="font-semibold">统一分隔符</span>
         </el-checkbox>
         <template v-if="same">
@@ -220,7 +217,7 @@ async function submit() {
             </el-radio-button>
           </el-radio-group>
           <span class="text-sm text-slate-500">或自定义</span>
-          <el-input v-model="sep" class="!w-24" size="small"/>
+          <el-input v-model="sep" size="small" class="!w-24" />
         </template>
       </div>
 
@@ -242,18 +239,18 @@ async function submit() {
         <div class="flex items-center gap-3">
           <el-input
               v-model="path"
-              clearable
-              placeholder="请输入包含待改名文件的文件夹路径"
               size="large"
+              placeholder="请输入包含待改名文件的文件夹路径"
+              clearable
               @keyup.enter="submit"
           />
-          <el-button :icon="FolderOpened" size="large" @click="pickDir">浏览</el-button>
+          <el-button size="large" :icon="FolderOpened" @click="pickDir">浏览</el-button>
         </div>
       </div>
 
       <div class="mt-6 flex items-center gap-3">
-        <el-button :icon="ArrowLeft" size="large" @click="router.push('/keyword')">返回</el-button>
-        <el-button :loading="loading" size="large" type="primary" @click="submit">提交</el-button>
+        <el-button size="large" :icon="ArrowLeft" @click="router.push('/keyword')">返回</el-button>
+        <el-button type="primary" size="large" :loading="loading" @click="submit">提交</el-button>
       </div>
     </el-card>
   </div>
