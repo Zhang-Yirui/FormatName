@@ -46,7 +46,7 @@ async function submit() {
     const res = await submitData(columns.value)
     if (res.code === 0) {
       ElMessage.success(res.msg)
-      await router.push('/format')
+      router.push('/format')
     } else {
       ElMessage.error(res.msg)
     }
@@ -73,7 +73,7 @@ async function submit() {
           type="info"
           :closable="false"
           show-icon
-          title="点击表头可以选择关键字，鼠标悬停在表头上可查看不能作为关键字的原因"
+          title="点击表头可以选择关键字（选中的关键字会全部加入命名格式），鼠标悬停在表头上可查看不能作为关键字的原因；不适合的项仍会出现在新名字里，但不会用来匹配文件名"
           class="mb-4"
       />
 

@@ -11,18 +11,37 @@ import {STEPS} from "@/constant";
 
 const router = useRouter()
 
+/** 默认连字符 */
+const DEFAULT_SEP = '-'
+
 /** 命名格式，奇偶交替：第 0/2/4... 项为字段，第 1/3/5... 项为分隔符 */
 const picked = ref<ExecuteItem[]>(initPicked())
 /** 是否统一分隔符 */
 const same = ref(true)
 /** 统一的分隔符 */
-const sep = ref('')
+const sep = ref(DEFAULT_SEP)
 /** 要改名的文件夹 */
 const path = ref('')
 const loading = ref(false)
 
 function initPicked(): ExecuteItem[] {
-  return columns.value.length > 1 ? [0, '', 1] : [0]
+  // 把关键字页选中的关键字全部加入命名格式，重复次数越少优先级越高
+  const keywords = columns.value
+      .map((col, index) => ({ col, index }))
+      .filter(({ col }) => col.isKeyWord && col.display)
+      .sort((a, b) => a.col.delta - b.col.delta)
+      .map(({ index }) => index)
+
+  if (keywords.length === 0) {
+    return columns.value.length > 1 ? [0, DEFAULT_SEP, 1] : [0]
+  }
+
+  const items: ExecuteItem[] = []
+  keywords.forEach((index, i) => {
+    if (i > 0) items.push(DEFAULT_SEP)
+    items.push(index)
+  })
+  return items
 }
 
 const SEPARATORS: { label: string; value: string }[] = [

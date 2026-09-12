@@ -19,6 +19,34 @@ pub fn invalid_char_re() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r#"[|><?*":\\/]"#).unwrap())
 }
 
+/// 该列的值看起来像序号：整列都是数字，且加起来还不到行数的平方
+///
+/// 序号是 1、2、3……，任何一个文件名里几乎都能匹配到其中一个数字，
+/// 拿它匹配文件只会把文件匹配到错误的人。
+fn looks_like_index(col: &ColData) -> bool {
+    if col.values.is_empty() {
+        return false;
+    }
+    // 与读取表格时一致：行数按「数据行 + 表头」算
+    let line_count = (col.values.len() + 1) as f64;
+    let mut sum = 0f64;
+    for v in &col.values {
+        match v.trim().parse::<f64>() {
+            Ok(f) => sum += f,
+            Err(_) => return false,
+        }
+    }
+    sum < line_count * line_count
+}
+
+/// 该列是否适合用来匹配文件名
+///
+/// 序号（见 [`looks_like_index`]）和重复值太多的列（性别、班级……）虽然可以被选进
+/// 命名格式，但用来匹配文件名只会把文件匹配到错误的行，所以匹配时要跳过它们。
+pub fn is_match_worthy(col: &ColData) -> bool {
+    col.delta <= 2 && !looks_like_index(col)
+}
+
 /// 单元格内容转字符串（对齐 openpyxl + Python str() 的行为）
 fn data_to_string(data: &Data) -> String {
     match data {
@@ -404,19 +432,7 @@ impl SheetTable {
         }
 
         // 判断表格值是否为序号
-        let line_count = (self.last_line - self.first_line + 1) as f64;
-        let mut sum = 0f64;
-        let mut numeric = true;
-        for v in &col.values {
-            match v.trim().parse::<f64>() {
-                Ok(f) => sum += f,
-                Err(_) => {
-                    numeric = false;
-                    break;
-                }
-            }
-        }
-        if numeric && !col.values.is_empty() && sum < line_count * line_count {
+        if looks_like_index(&col) {
             col.is_key_word = false;
             col.reason = "该项可能是序号，不适合做关键字".to_string();
         }

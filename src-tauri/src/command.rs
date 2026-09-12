@@ -6,7 +6,10 @@ use chrono::Local;
 use regex::Regex;
 use tauri::State;
 
-use crate::excel::{invalid_char_re, load_range, sheet_from_text, SheetTable, ALLOWED_EXTS, TEXT_EXTS};
+use crate::excel::{
+    invalid_char_re, is_match_worthy, load_range, sheet_from_text, SheetTable, ALLOWED_EXTS,
+    TEXT_EXTS,
+};
 use crate::model::{
     ApiResp, AppInfosResp, ColData, Config, ExecuteItem, ExecuteResp, NamePair,
 };
@@ -233,18 +236,29 @@ pub fn submit_execute(path: String, execute: Vec<ExecuteItem>, state: State<AppS
 }
 
 /// 用关键字匹配一个文件名，返回它对应的新名字下标
+///
+/// 同一个文件名往往能在多个关键字里匹配上：像「序号」这类很短的值
+/// （正则 `1` 能匹配几乎所有文件名）会盖住真正有用的关键字，
+/// 所以这里取「匹配到的片段最长」的那一行，最长才算最具体；
+/// 长度相同时保留排在前面的关键字（`keywords` 已按优先级排好序）。
 fn find_key(keywords: &[ColData], new_len: usize, file_name: &str) -> Option<usize> {
+    let mut best: Option<(usize, usize)> = None;
     for kw in keywords {
         for (k, value) in kw.values.iter().enumerate() {
             if value.is_empty() || k >= new_len {
                 continue;
             }
-            if compile(value).is_match(file_name) {
-                return Some(k);
+            let Some(m) = compile(value).find(file_name) else {
+                continue;
+            };
+            let len = m.as_str().len();
+            match best {
+                Some((best_len, _)) if best_len >= len => {}
+                _ => best = Some((len, k)),
             }
         }
     }
-    None
+    best.map(|(_, k)| k)
 }
 
 /// 根据表格数据、命名格式和目录中的文件名，计算新名字与新旧名字对照
@@ -256,7 +270,15 @@ fn build_execute(
     old: &[String],
 ) -> Result<(Vec<ColData>, Vec<String>, Vec<i32>, Vec<NamePair>), ApiResp> {
     // 为关键字排序：重复次数越少优先级越高
-    let mut keywords: Vec<ColData> = data.iter().filter(|c| c.is_key_word).cloned().collect();
+    //
+    // 序号、性别这类列虽然可以被选进命名格式，但不适合用来匹配文件：
+    // 比如序号 1 的正则能匹配几乎所有文件名，会让所有文件都落到第一行，
+    // 所以匹配时要把它们筛掉（它们仍然会出现在新名字里）
+    let mut keywords: Vec<ColData> = data
+        .iter()
+        .filter(|c| c.is_key_word && is_match_worthy(c))
+        .cloned()
+        .collect();
     keywords.sort_by_key(|c| c.delta);
 
     // 生成新名字列表
@@ -843,6 +865,79 @@ mod tests {
 
     fn read(dir: &Path, name: &str) -> String {
         std::fs::read_to_string(dir.join(name)).unwrap()
+    }
+
+    fn col(key: &str, values: &[&str], delta: usize) -> ColData {
+        ColData {
+            key: key.to_string(),
+            values: values.iter().map(|v| v.to_string()).collect(),
+            is_key_word: true,
+            display: true,
+            reason: "该项适合做关键字".to_string(),
+            delta,
+        }
+    }
+
+    /// 序号这种很短的值（正则 `1` 能匹配几乎所有文件名）不能盖住学号
+    #[test]
+    fn find_key_prefers_longest_match() {
+        let keywords = vec![
+            col("序号", &["1", "2", "9"], 0),
+            col(
+                "学号",
+                &["201604020242", "201704020207", "201904020207"],
+                0,
+            ),
+        ];
+        // 三个序号值都能在文件名里匹配到，但学号匹配得最长，应当选学号那一行
+        assert_eq!(find_key(&keywords, 3, "201904020207-甘.png"), Some(2));
+        assert_eq!(find_key(&keywords, 3, "9-201904020207-甘.png"), Some(2));
+        assert_eq!(find_key(&keywords, 3, "没有匹配.txt"), None);
+    }
+
+    /// 一样长时保留优先级更高（排序在前）的关键字所在的行
+    #[test]
+    fn find_key_keeps_priority_on_tie() {
+        let keywords = vec![col("高优先级", &["2019"], 0), col("低优先级", &["0207"], 0)];
+        assert_eq!(find_key(&keywords, 1, "201904020207-甘.png"), Some(0));
+    }
+
+    /// 序号列不参与匹配：否则所有文件都会被它匹配到第一行
+    #[test]
+    fn build_execute_skips_index_like_keyword() {
+        let data = vec![
+            col("序号", &["1", "2", "3", "4"], 0),
+            col(
+                "学号",
+                &["201604020242", "201704020207", "201904020207", "201904020219"],
+                0,
+            ),
+            // 重复值太多的列（性别）同样不参与匹配
+            col("性别", &["男", "男", "男", "男"], 3),
+        ];
+        let execute = vec![
+            ExecuteItem::Index(0),
+            ExecuteItem::Text("-".to_string()),
+            ExecuteItem::Index(1),
+        ];
+        let old = vec![
+            "201904020207-甘.png".to_string(),
+            "201904020218.png".to_string(),
+        ];
+        let (keywords, new, map, list) = build_execute(&data, &execute, &old).unwrap();
+
+        assert_eq!(
+            keywords.iter().map(|c| c.key.as_str()).collect::<Vec<_>>(),
+            vec!["学号"]
+        );
+        // 命名格式里的序号照旧出现在新名字里
+        assert_eq!(new[2], "3-201904020207");
+        // 文件匹配到学号对应的那一行，而不是第一行
+        assert_eq!(map, vec![0, 0, 1, 0]);
+        // 表格里没有 201904020218，这个文件匹配不上，也不会被算到别人头上
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].old, "201904020207-甘.png");
+        assert_eq!(list[0].new, "3-201904020207.png");
     }
 
     #[test]
