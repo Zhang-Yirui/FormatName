@@ -405,6 +405,7 @@ pub fn rescan(state: State<AppState>) -> ApiResp {
             new_name = format!("{}({}){}", exec.new[k], n, suffix);
         }
         exists.insert(new_name.clone());
+        used.insert(new_name.clone());
         jobs.push((name.clone(), new_name));
     }
 
@@ -427,8 +428,21 @@ pub fn rescan(state: State<AppState>) -> ApiResp {
         }
     }
 
+    // 已经改名时目录里放的是新名字，而对照表记的是改名前的文件名。
+    // 「未知」= 目录里没匹配上任何关键字的文件，所以这里要存「改名前的名字」，
+    // 再加上那些没匹配上、一直没动过的文件
+    let unmatched: Vec<String> = current
+        .iter()
+        .filter(|name| !used.contains(*name))
+        .cloned()
+        .collect();
+
+    let mut old: Vec<String> = list.iter().map(|pair| pair.old.clone()).collect();
+    old.extend(unmatched);
+    old.sort();
+
     exec.map = map;
-    exec.old = current;
+    exec.old = old;
     exec.list = list;
     if let Err(e) = state.set_execute(exec) {
         return ApiResp::err(7, e);
