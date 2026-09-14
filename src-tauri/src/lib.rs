@@ -38,7 +38,9 @@ pub fn run() {
             command::get_app_info,
             command::get_data,
             command::submit_excel_path,
+            command::submit_table_text,
             command::submit_data,
+            command::is_dir,
             command::submit_execute,
             command::get_execute,
             command::rescan,
@@ -48,5 +50,5 @@ pub fn run() {
             command::clear_data,
         ])
         .run(tauri::generate_context!())
-        .expect("启动 Format Name 失败");
+        .expect("启动 FormatName 失败");
 }

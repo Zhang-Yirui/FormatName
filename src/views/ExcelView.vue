@@ -1,85 +1,165 @@
-<script lang="ts" setup>
-import {onMounted, onUnmounted, ref} from 'vue'
+<script setup lang="ts">
+import {computed, onMounted, onUnmounted, ref} from 'vue'
 import {useRouter} from 'vue-router'
 import {open} from '@tauri-apps/plugin-dialog'
 import {getCurrentWebview} from '@tauri-apps/api/webview'
 import {ElMessage} from 'element-plus'
-import {Document, FolderOpened, Right} from '@element-plus/icons-vue'
-import {submitExcelPath} from '@/api'
+import {FolderOpened, Right} from '@element-plus/icons-vue'
+import {submitExcelPath, submitTableText} from '@/api'
+import {EXCEL_EXT, STEPS, TEXT_EXT} from '@/constant'
 import {columns, loadColumns, resetStep} from '@/store'
 
-/** 允许的 Excel 扩展名 */
-const EXCEL_EXT = ['xlsx', 'xlsm', 'xltx', 'xltm']
+const ALL_EXT = [...EXCEL_EXT, ...TEXT_EXT]
 
 const router = useRouter()
-const path = ref('')
 const loading = ref(false)
-const hasCache = ref(false)
 /** 文件正被拖拽到窗口上 */
 const dragging = ref(false)
+/** 当前导入的来源（文件名） */
+const sourceName = ref('')
+/** 本次进入页面后是否重新导入过数据 */
+const imported = ref(false)
+/** 进入页面时后端是否已经有数据 */
+const hasCache = ref(false)
+/** 浏览器环境下的文件选择框（Tauri 文件对话框的兜底） */
+const fileInput = ref<HTMLInputElement | null>(null)
+
 let unlistenDragDrop: (() => void) | undefined
+/** 同一次拖拽会被原生事件和浏览器事件各触发一次，用它去重 */
+let lastDropAt = 0
 
-/** 校验并写入文件路径 */
-function setPath(file: string) {
-  const ext = file.slice(file.lastIndexOf('.') + 1).toLowerCase()
-  if (!EXCEL_EXT.includes(ext)) {
-    ElMessage.warning('请拖入 Excel 文件（.xlsx / .xlsm / .xltx / .xltm）')
-    return
-  }
-  path.value = file
+function duplicatedDrop(): boolean {
+  const now = Date.now()
+  if (now - lastDropAt < 1000) return true
+  lastDropAt = now
+  return false
 }
 
-async function pickFile() {
-  const selected = await open({
-    multiple: false,
-    directory: false,
-    title: '选择 Excel 花名册',
-    filters: [
-      {
-        name: 'Excel 表格',
-        extensions: [...EXCEL_EXT],
-      },
-    ],
-  })
-  if (typeof selected === 'string' && selected) {
-    path.value = selected
-  }
+const rowCount = computed(() => columns.value[0]?.values.length ?? 0)
+const hasData = computed(() => columns.value.length > 0 && rowCount.value > 0)
+
+/** 列数据转换成 el-table 需要的行数据 */
+const rows = computed(() =>
+    Array.from({length: rowCount.value}, (_, i) => {
+      const row: Record<string, string> = {}
+      columns.value.forEach((col, j) => {
+        row[String(j)] = col.values[i] ?? ''
+      })
+      return row
+    }),
+)
+
+function extOf(name: string): string {
+  return name.slice(name.lastIndexOf('.') + 1).toLowerCase()
 }
 
-/** 浏览器环境下的拖拽兜底（Tauri 窗口由原生拖拽事件处理） */
-function onDrop(e: DragEvent) {
-  dragging.value = false
-  const file = e.dataTransfer?.files?.[0] as (File & { path?: string }) | undefined
-  if (!file) return
-  if (file.path) {
-    setPath(file.path)
-  } else {
-    ElMessage.info('当前环境无法获取文件完整路径，请点击“浏览”按钮选择文件')
-  }
+/** 导入成功后刷新列数据，并让后面的步骤重新走一遍 */
+async function afterImport(name: string) {
+  sourceName.value = name
+  imported.value = true
+  columns.value = await loadColumns(true)
+  resetStep(1)
 }
 
-async function submit() {
-  if (!path.value.trim()) {
-    ElMessage.warning('请先选择 Excel 文件')
+/** 按路径导入（Excel / CSV 都由后端解析） */
+async function importPath(file: string) {
+  const ext = extOf(file)
+  if (!ALL_EXT.includes(ext)) {
+    ElMessage.warning('请选择 Excel（.xlsx / .xlsm / .xltx / .xltm）或 CSV（.csv）文件')
     return
   }
   loading.value = true
   try {
-    const res = await submitExcelPath(path.value.trim())
-    if (res.code === 0) {
-      ElMessage.success(res.msg)
-      await loadColumns(true)
-      // 换了新的花名册，后面的步骤需要重新走一遍
-      resetStep(1)
-      await router.push('/keyword')
-    } else {
+    const res = await submitExcelPath(file)
+    if (res.code !== 0) {
       ElMessage.error(res.msg)
+      return
     }
+    await afterImport(file.split(/[\\/]/).pop() ?? file)
+    ElMessage.success(res.msg)
   } catch (e) {
     ElMessage.error(`读取失败：${e}`)
   } finally {
     loading.value = false
   }
+}
+
+/** 导入一段文本（浏览器环境拿不到文件完整路径时的兜底） */
+async function importText(name: string, text: string) {
+  if (!text.trim()) {
+    ElMessage.warning('文件内容为空，请重新选择表格文件')
+    return
+  }
+  loading.value = true
+  try {
+    const res = await submitTableText(text)
+    if (res.code !== 0) {
+      ElMessage.error(res.msg)
+      return
+    }
+    await afterImport(name)
+    ElMessage.success(res.msg)
+  } catch (e) {
+    ElMessage.error(`解析失败：${e}`)
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 处理一个 File（拖拽或文件选择框） */
+async function processFile(file: File) {
+  const path = (file as File & { path?: string }).path
+  // 拿到完整路径时交给后端读取，Excel 只能这样解析
+  if (path) {
+    await importPath(path)
+    return
+  }
+  if (TEXT_EXT.includes(extOf(file.name))) {
+    await importText(file.name, await file.text())
+    return
+  }
+  ElMessage.info('当前环境无法获取文件完整路径，请点击“选择文件”按钮选择文件')
+}
+
+async function pickFile() {
+  let selected: string | string[] | null
+  try {
+    selected = await open({
+      multiple: false,
+      directory: false,
+      title: '选择花名册',
+      filters: [
+        {name: '表格文件', extensions: [...ALL_EXT]},
+        {name: 'Excel 表格', extensions: [...EXCEL_EXT]},
+        {name: '文本表格', extensions: [...TEXT_EXT]},
+      ],
+    })
+  } catch {
+    // 非 Tauri 环境（浏览器调试）退回浏览器的文件选择框
+    fileInput.value?.click()
+    return
+  }
+  if (typeof selected === 'string' && selected) await importPath(selected)
+}
+
+function onFileSelect(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (file) void processFile(file)
+  // 清空 value，这样重复选择同一个文件也会触发 change
+  input.value = ''
+}
+
+/** 浏览器环境下的拖拽兜底（Tauri 窗口由原生拖拽事件处理） */
+function onDrop(e: DragEvent) {
+  dragging.value = false
+  const file = e.dataTransfer?.files?.[0]
+  if (file && !duplicatedDrop()) void processFile(file)
+}
+
+async function next() {
+  if (!hasData.value) return
+  await router.push('/keyword')
 }
 
 onMounted(async () => {
@@ -94,12 +174,10 @@ onMounted(async () => {
         dragging.value = true
       } else if (payload.type === 'drop') {
         dragging.value = false
-        const file = payload.paths.find((p) =>
-            EXCEL_EXT.some((ext) => p.toLowerCase().endsWith(`.${ext}`)),
-        )
-        if (file) setPath(file)
-        else if (payload.paths.length > 0)
-          ElMessage.warning('请拖入 Excel 文件（.xlsx / .xlsm / .xltx / .xltm）')
+        const file = payload.paths.find((p) => ALL_EXT.includes(extOf(p)))
+        if (file && !duplicatedDrop()) void importPath(file)
+        else if (!file && payload.paths.length > 0 && !duplicatedDrop())
+          ElMessage.warning('请选择 Excel（.xlsx / .xlsm / .xltx / .xltm）或 CSV（.csv）文件')
       } else {
         dragging.value = false
       }
@@ -113,56 +191,88 @@ onUnmounted(() => unlistenDragDrop?.())
 </script>
 
 <template>
-  <div class="mx-auto w-[90vw]">
-    <el-card class="!rounded-2xl" shadow="never">
-      <template #header>
-        <div class="flex items-center gap-2 text-lg font-semibold text-brand">
-          <el-icon>
-            <Document/>
-          </el-icon>
-          <span>第一步：选择 Excel 花名册</span>
-        </div>
-      </template>
+  <div class="page-view">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">{{ STEPS[0].desc }}</h1>
+        <p class="page-desc">{{ STEPS[0].hint }}</p>
+      </div>
+    </div>
 
+    <el-card v-loading="loading" shadow="never" class="!rounded-2xl">
       <el-alert
+          type="info"
           :closable="false"
-          class="mb-5"
           show-icon
           title="表格第一行为表头，第二行开始为数据，表头将作为关键字"
-          type="info"
+          class="mb-4"
       />
 
-      <!-- 文件路径输入 + 浏览按钮（也可把文件拖到这里） -->
+      <!-- 导入文件 -->
       <div
+          class="drop-zone"
           :class="{ 'is-dragover': dragging }"
-          class="path-row"
           @dragover.prevent="dragging = true"
           @dragleave.prevent="dragging = false"
           @drop.prevent="onDrop"
       >
-        <el-input
-            v-model="path"
-            clearable
-            placeholder="请选择、粘贴 Excel 文件路径，或将文件拖拽到此处"
-            size="large"
-            @keyup.enter="submit"
+        <div class="drop-icon">📄</div>
+        <p class="drop-text">将文件拖拽到此处，或点击下方选择文件</p>
+        <p class="drop-hint">支持 .xlsx / .xlsm / .xltx / .xltm / .csv</p>
+        <el-button :icon="FolderOpened" @click="pickFile">选择文件</el-button>
+        <input
+            ref="fileInput"
+            type="file"
+            class="hidden-input"
+            :accept="`.${ALL_EXT.join(',.')}`"
+            @change="onFileSelect"
         />
-        <el-button :icon="FolderOpened" size="large" @click="pickFile">浏览</el-button>
       </div>
 
-      <p class="hint">
-        也可以手动粘贴路径：按住 Shift 键，右键点击 Excel 文件，选择“复制为路径”。
-      </p>
+      <!-- 表格数据（导入后立即显示） -->
+      <template v-if="hasData">
+        <div class="mt-5 flex items-center justify-between">
+          <span class="text-[13px] font-semibold text-slate-700">
+            表格数据
+            <span v-if="sourceName" class="ml-2 text-[11.5px] font-normal text-slate-400">
+              {{ sourceName }}
+            </span>
+          </span>
+          <span class="text-[11.5px] text-slate-400">
+            共 {{ columns.length }} 列 · {{ rowCount }} 行
+          </span>
+        </div>
+        <el-table
+            :data="rows"
+            border
+            stripe
+            size="small"
+            max-height="380"
+            class="mt-2"
+        >
+          <el-table-column
+              v-for="(col, index) in columns"
+              :key="index"
+              :prop="String(index)"
+              :label="col.key"
+              align="center"
+              header-align="center"
+              min-width="120"
+              show-overflow-tooltip
+          />
+        </el-table>
+      </template>
+      <p v-else class="mt-5 text-center text-[13px] text-slate-400">尚未导入表格数据，请先选择或拖入表格文件</p>
 
-      <div class="actions">
-        <el-button :loading="loading" size="large" type="primary" @click="submit">
-          提交
+      <div class="mt-5 flex items-center gap-3">
+        <el-button type="primary" size="large" :icon="Right" :disabled="!hasData" @click="next">
+          下一步 · 选择关键字
         </el-button>
         <el-button
-            v-if="hasCache"
-            :icon="Right"
-            size="large"
+            v-if="hasCache && !imported"
             type="success"
+            size="large"
+            :icon="Right"
             @click="router.push('/format')"
         >
           继续使用上次的数据
@@ -173,48 +283,43 @@ onUnmounted(() => unlistenDragDrop?.())
 </template>
 
 <style scoped>
-.path-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.25rem;
-  border: 1px dashed transparent;
-  border-radius: 0.75rem;
-  transition: background-color 0.2s ease,
-  border-color 0.2s ease;
-}
-
-.path-row.is-dragover {
-  border-color: var(--el-color-primary, #409eff);
-  background-color: var(--el-color-primary-light-9, #ecf5ff);
-}
-
-.path-row .el-input {
-  flex: 1;
-  min-width: 0;
-}
-
-.path-row .el-button {
-  flex-shrink: 0;
-}
-
-.hint {
-  margin-top: 0.75rem;
-  font-size: 12px;
-  line-height: 1.5rem;
-  color: #94a3b8;
+/* 拖拽区 */
+.drop-zone {
+  margin-top: 16px;
+  padding: 36px 24px;
+  border: 2px dashed #d0d5dd;
+  border-radius: 12px;
+  background: #fafbfc;
   text-align: center;
+  transition: border-color 0.2s ease,
+  background-color 0.2s ease;
 }
 
-.actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1em;
-  margin-top: 1.5rem;
+.drop-zone.is-dragover {
+  border-color: var(--el-color-primary, #409eff);
+  background: var(--el-color-primary-light-9, #ecf5ff);
 }
 
-.actions .el-button + .el-button {
-  margin-left: 0;
+.drop-icon {
+  margin-bottom: 8px;
+  font-size: 32px;
 }
+
+.drop-text {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #384252;
+}
+
+.drop-hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: #949aab;
+}
+
+.hidden-input {
+  display: none;
+}
+
 </style>

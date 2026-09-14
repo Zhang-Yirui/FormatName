@@ -2,18 +2,49 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufReader;
 
-use calamine::{Data, Range, Reader, Xlsx};
+use calamine::{Cell, Data, Range, Reader, Xlsx};
 use regex::Regex;
+use serde_json::Value;
 
 use crate::model::ColData;
 
 /// 允许读取的表格扩展名
 pub const ALLOWED_EXTS: [&str; 4] = ["xlsx", "xlsm", "xltx", "xltm"];
+/// 允许读取的文本表格扩展名：内容按 CSV / JSON 解析
+pub const TEXT_EXTS: [&str; 3] = ["csv", "json", "txt"];
 
 /// Windows 文件名不允许出现的字符
 pub fn invalid_char_re() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| Regex::new(r#"[|><?*":\\/]"#).unwrap())
+}
+
+/// 该列的值看起来像序号：整列都是数字，且加起来还不到行数的平方
+///
+/// 序号是 1、2、3……，任何一个文件名里几乎都能匹配到其中一个数字，
+/// 拿它匹配文件只会把文件匹配到错误的人。
+fn looks_like_index(col: &ColData) -> bool {
+    if col.values.is_empty() {
+        return false;
+    }
+    // 与读取表格时一致：行数按「数据行 + 表头」算
+    let line_count = (col.values.len() + 1) as f64;
+    let mut sum = 0f64;
+    for v in &col.values {
+        match v.trim().parse::<f64>() {
+            Ok(f) => sum += f,
+            Err(_) => return false,
+        }
+    }
+    sum < line_count * line_count
+}
+
+/// 该列是否适合用来匹配文件名
+///
+/// 序号（见 [`looks_like_index`]）和重复值太多的列（性别、班级……）虽然可以被选进
+/// 命名格式，但用来匹配文件名只会把文件匹配到错误的行，所以匹配时要跳过它们。
+pub fn is_match_worthy(col: &ColData) -> bool {
+    col.delta <= 2 && !looks_like_index(col)
 }
 
 /// 单元格内容转字符串（对齐 openpyxl + Python str() 的行为）
@@ -33,6 +64,225 @@ fn data_to_string(data: &Data) -> String {
         Data::Empty => String::new(),
         other => other.to_string(),
     }
+}
+
+/// 去掉 UTF-8 BOM
+fn strip_bom(text: &str) -> &str {
+    text.strip_prefix('\u{feff}').unwrap_or(text)
+}
+
+/// 拆分 Markdown 表格的一行，去掉首尾多余的竖线
+fn split_md_row(line: &str) -> Vec<String> {
+    let trimmed = line.trim();
+    let mut cells: Vec<String> = trimmed.split('|').map(|c| c.trim().to_string()).collect();
+    if trimmed.starts_with('|') && cells.len() > 1 {
+        cells.remove(0);
+    }
+    if trimmed.ends_with('|') && cells.len() > 1 {
+        cells.pop();
+    }
+    cells
+}
+
+/// 是否为 Markdown 表格的分隔行，例如 `| --- | :---: |`
+fn is_md_separator(line: &str) -> bool {
+    let trimmed = line.trim();
+    if !trimmed.contains('|') {
+        return false;
+    }
+    let cells = split_md_row(trimmed);
+    !cells.is_empty()
+        && cells.iter().all(|c| {
+        let c = c.trim_matches(':');
+        !c.is_empty() && c.chars().all(|ch| ch == '-')
+    })
+}
+
+/// 猜测分隔符：优先制表符（从 Excel / WPS 复制出来的表格），其次逗号、分号
+fn detect_delimiter(lines: &[&str]) -> char {
+    let sample = lines.first().unwrap_or(&"");
+    if sample.contains('\t') {
+        '\t'
+    } else if sample.contains(',') {
+        ','
+    } else if sample.contains(';') {
+        ';'
+    } else {
+        '\t'
+    }
+}
+
+/// 按分隔符解析文本，支持引号包裹（引号内的分隔符与换行不生效）
+fn parse_delimited(text: &str, delimiter: char) -> Vec<Vec<String>> {
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut row: Vec<String> = Vec::new();
+    let mut field = String::new();
+    let mut in_quotes = false;
+    let mut chars = text.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if in_quotes {
+            match c {
+                // 两个连续的引号表示一个普通的引号
+                '"' if chars.peek() == Some(&'"') => {
+                    field.push('"');
+                    chars.next();
+                }
+                '"' => in_quotes = false,
+                _ => field.push(c),
+            }
+            continue;
+        }
+        match c {
+            '"' => in_quotes = true,
+            '\r' => {}
+            '\n' => {
+                row.push(field.trim().to_string());
+                field.clear();
+                rows.push(std::mem::take(&mut row));
+            }
+            c if c == delimiter => {
+                row.push(field.trim().to_string());
+                field.clear();
+            }
+            c => field.push(c),
+        }
+    }
+    row.push(field.trim().to_string());
+    rows.push(row);
+
+    rows.retain(|r| r.iter().any(|c| !c.is_empty()));
+    rows
+}
+
+/// 解析 Markdown 表格：分隔行前的一行是表头，其后是数据
+fn parse_markdown(text: &str) -> Vec<Vec<String>> {
+    let lines: Vec<&str> = text
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect();
+    let separator = lines.iter().position(|l| is_md_separator(l));
+
+    let mut rows: Vec<Vec<String>> = match separator {
+        // 分隔行前面那一行是表头（表格上方的标题行会被忽略）
+        Some(i) if i > 0 => {
+            let mut rows = vec![split_md_row(lines[i - 1])];
+            rows.extend(
+                lines[i + 1..]
+                    .iter()
+                    .filter(|l| !is_md_separator(l))
+                    .map(|l| split_md_row(l)),
+            );
+            rows
+        }
+        // 第一行就是分隔行：没有表头，剩下的都当作数据
+        Some(_) => lines.iter().skip(1).map(|l| split_md_row(l)).collect(),
+        // 没有分隔行：第一行当作表头
+        None => lines.iter().map(|l| split_md_row(l)).collect(),
+    };
+
+    rows.retain(|r| r.iter().any(|c| !c.is_empty()));
+    rows
+}
+
+/// JSON 值转单元格文本：整数不带小数点，null 记为空
+fn json_to_string(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.trim().to_string(),
+        Value::Number(n) => match (n.as_i64(), n.as_f64()) {
+            (Some(i), _) => i.to_string(),
+            (None, Some(f)) if f.fract() == 0.0 && f.abs() < 1e15 => format!("{}", f as i64),
+            (None, Some(f)) => f.to_string(),
+            (None, None) => n.to_string(),
+        },
+        Value::Bool(b) => if *b { "True" } else { "False" }.to_string(),
+        Value::Null => String::new(),
+        other => other.to_string(),
+    }
+}
+
+/// 解析 JSON：支持对象数组 `[{...}]`、二维数组 `[["a","b"], ...]` 与单个对象
+fn parse_json(text: &str) -> Option<Vec<Vec<String>>> {
+    let value: Value = serde_json::from_str(text).ok()?;
+
+    // 对象（数组）：出现过的键按先后顺序作为表头
+    let objects: Vec<&serde_json::Map<String, Value>> = match &value {
+        Value::Object(obj) => vec![obj],
+        Value::Array(items) => items.iter().filter_map(|v| v.as_object()).collect(),
+        _ => return None,
+    };
+    if let Value::Array(items) = &value {
+        if objects.len() != items.len() {
+            // 二维数组：每一项都是一行
+            let rows: Vec<Vec<String>> = items
+                .iter()
+                .map(|v| match v {
+                    Value::Array(cells) => cells.iter().map(json_to_string).collect(),
+                    other => vec![json_to_string(other)],
+                })
+                .collect();
+            return Some(rows);
+        }
+    }
+
+    let mut headers: Vec<String> = Vec::new();
+    for obj in &objects {
+        for key in obj.keys() {
+            if !headers.contains(key) {
+                headers.push(key.clone());
+            }
+        }
+    }
+    let mut rows = vec![headers.clone()];
+    for obj in &objects {
+        rows.push(
+            headers
+                .iter()
+                .map(|h| obj.get(h).map(json_to_string).unwrap_or_default())
+                .collect(),
+        );
+    }
+    Some(rows)
+}
+
+/// 解析文本表格，自动识别 JSON、Markdown 表格与 CSV / TSV
+///
+/// 第一行为表头，其余为数据行
+pub fn parse_text_table(text: &str) -> Vec<Vec<String>> {
+    let text = strip_bom(text);
+    let trimmed = text.trim();
+    if trimmed.starts_with('[') || trimmed.starts_with('{') {
+        if let Some(rows) = parse_json(trimmed) {
+            return rows;
+        }
+    }
+    let lines: Vec<&str> = text
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .collect();
+    let is_md = lines.iter().any(|l| l.trim().starts_with('|'))
+        || lines.get(1).is_some_and(|l| is_md_separator(l));
+
+    if is_md {
+        parse_markdown(text)
+    } else {
+        parse_delimited(text, detect_delimiter(&lines))
+    }
+}
+
+/// 把二维文本表格转成 calamine 的 Range，这样后面的分析与 Excel 完全一致
+pub fn range_from_rows(rows: &[Vec<String>]) -> Range<Data> {
+    let mut cells: Vec<Cell<Data>> = Vec::new();
+    for (r, row) in rows.iter().enumerate() {
+        for (c, value) in row.iter().enumerate() {
+            if value.is_empty() {
+                continue;
+            }
+            cells.push(Cell::new((r as u32, c as u32), Data::String(value.clone())));
+        }
+    }
+    Range::from_sparse(cells)
 }
 
 /// 读取工作簿中第一张工作表
@@ -182,19 +432,7 @@ impl SheetTable {
         }
 
         // 判断表格值是否为序号
-        let line_count = (self.last_line - self.first_line + 1) as f64;
-        let mut sum = 0f64;
-        let mut numeric = true;
-        for v in &col.values {
-            match v.trim().parse::<f64>() {
-                Ok(f) => sum += f,
-                Err(_) => {
-                    numeric = false;
-                    break;
-                }
-            }
-        }
-        if numeric && !col.values.is_empty() && sum < line_count * line_count {
+        if looks_like_index(&col) {
             col.is_key_word = false;
             col.reason = "该项可能是序号，不适合做关键字".to_string();
         }
@@ -217,5 +455,67 @@ impl SheetTable {
         (self.first_col..=self.last_col)
             .map(|c| self.col_data(c))
             .collect()
+    }
+}
+
+/// 从一段文本（CSV / Markdown / 粘贴的表格）构建工作表
+pub fn sheet_from_text(text: &str) -> SheetTable {
+    SheetTable::new(range_from_rows(&parse_text_table(text)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// CSV：逗号分隔 + CRLF 换行
+    #[test]
+    fn parse_csv_table() {
+        let mut sheet = sheet_from_text("姓名,学号,班级\r\n张三,2021001,计科1班\r\n李四,2021002,计科2班\r\n");
+        assert_eq!(sheet.is_correct(), 1);
+        let data = sheet.excel_data();
+        assert_eq!(data.len(), 3);
+        assert_eq!(data[0].key, "姓名");
+        assert_eq!(data[1].values, vec!["2021001", "2021002"]);
+    }
+
+    /// Markdown 表格：分隔行带对齐冒号，单元格可以为空
+    #[test]
+    fn parse_markdown_table() {
+        let mut sheet = sheet_from_text(
+            "| 姓名 | 学号 | 备注 |\n| --- | :---: | --- |\n| 张三 | 1 | \"a,b\" |\n| 李四 | 2 |  |\n",
+        );
+        assert_eq!(sheet.is_correct(), 1);
+        let data = sheet.excel_data();
+        assert_eq!(data.len(), 3);
+        assert_eq!(data[0].key, "姓名");
+        assert_eq!(data[2].values, vec!["\"a,b\"", ""]);
+    }
+
+    /// JSON：对象数组取所有键做表头，二维数组直接作为行
+    #[test]
+    fn parse_json_table() {
+        let mut sheet = sheet_from_text(
+            r#"[{"姓名":"张三","学号":2021001},{"姓名":"李四","学号":2021002,"备注":null}]"#,
+        );
+        assert_eq!(sheet.is_correct(), 1);
+        let data = sheet.excel_data();
+        assert_eq!(data.iter().map(|c| c.key.clone()).collect::<Vec<_>>(), vec!["姓名", "学号", "备注"]);
+        assert_eq!(data[1].values, vec!["2021001", "2021002"]);
+        assert_eq!(data[2].values, vec!["", ""]);
+
+        let mut sheet = sheet_from_text(r#"[["姓名","学号"],["张三","1"]]"#);
+        assert_eq!(sheet.is_correct(), 1);
+        let data = sheet.excel_data();
+        assert_eq!(data[0].key, "姓名");
+        assert_eq!(data[1].values, vec!["1"]);
+    }
+
+    /// 从表格软件复制出来的表格：制表符分隔，引号里的内容保持原样
+    #[test]
+    fn parse_tsv_table() {
+        let mut sheet = sheet_from_text("姓名\t备注\n张三\t\"含\t制表符\"\n李四\t普通\n");
+        assert_eq!(sheet.is_correct(), 1);
+        let data = sheet.excel_data();
+        assert_eq!(data[1].values, vec!["含\t制表符", "普通"]);
     }
 }

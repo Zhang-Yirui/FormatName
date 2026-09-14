@@ -6,7 +6,10 @@ use chrono::Local;
 use regex::Regex;
 use tauri::State;
 
-use crate::excel::{invalid_char_re, load_range, SheetTable, ALLOWED_EXTS};
+use crate::excel::{
+    invalid_char_re, is_match_worthy, load_range, sheet_from_text, SheetTable, ALLOWED_EXTS,
+    TEXT_EXTS,
+};
 use crate::model::{
     ApiResp, AppInfosResp, ColData, Config, ExecuteItem, ExecuteResp, NamePair,
 };
@@ -61,7 +64,50 @@ pub fn clear_data(state: State<AppState>) -> ApiResp {
 
 // ---------------------------------------------------------------- 第一步：Excel
 
-/// 提交 excel 的路径
+/// 读取文本文件（只支持 UTF-8，含 BOM）
+fn read_text_file(path: &str) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|e| format!("无法读取文件：{}", e))?;
+    let body = match bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
+        Some(rest) => rest,
+        None => bytes.as_slice(),
+    };
+    String::from_utf8(body.to_vec()).map_err(|_| {
+        "无法识别文件编码，请把文件另存为 UTF-8 编码后再导入（Excel 可选“CSV UTF-8”）".to_string()
+    })
+}
+
+/// 校验一张工作表并写入配置
+///
+/// 返回值：
+/// - 0：读取成功
+/// - 3：表格为空
+/// - 4：表格少于 2 行
+/// - 5：表头存在重复
+/// - 6：无法识别的表格格式
+fn save_sheet(mut sheet: SheetTable, state: &State<'_, AppState>) -> ApiResp {
+    let code = sheet.is_correct();
+
+    match code {
+        1 => {
+            let config = Config {
+                data: sheet.excel_data(),
+            };
+            if let Err(e) = state.set_config(config) {
+                return ApiResp::err(6, e);
+            }
+            if let Err(e) = state.reset_execute() {
+                return ApiResp::err(6, e);
+            }
+            ApiResp::ok("读取成功")
+        }
+        0 => ApiResp::err(3, "表格不能为空"),
+        -1 => ApiResp::err(4, "表格应至少有2行"),
+        2 => ApiResp::err(5, "表格表头存在重复"),
+        _ => ApiResp::err(6, "无法识别的表格格式"),
+    }
+}
+
+/// 提交表格文件的路径（Excel / CSV / Markdown）
 ///
 /// 返回值：
 /// - 0：读取成功
@@ -84,38 +130,38 @@ pub fn submit_excel_path(path: String, state: State<AppState>) -> ApiResp {
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase())
         .unwrap_or_default();
-    if !ALLOWED_EXTS.contains(&ext.as_str()) {
-        return ApiResp::err(
-            2,
-            "提交失败，不能读取该格式文件，请选择(.xlsx)(.xlsm)(.xltx)(.xltm)文件",
-        );
+
+    if ALLOWED_EXTS.contains(&ext.as_str()) {
+        let range = match load_range(&path) {
+            Ok(r) => r,
+            Err(e) => return ApiResp::err(6, e),
+        };
+        return save_sheet(SheetTable::new(range), &state);
     }
 
-    let range = match load_range(&path) {
-        Ok(r) => r,
-        Err(e) => return ApiResp::err(6, e),
-    };
-    let mut sheet = SheetTable::new(range);
-    let code = sheet.is_correct();
-
-    match code {
-        1 => {
-            let config = Config {
-                data: sheet.excel_data(),
-            };
-            if let Err(e) = state.set_config(config) {
-                return ApiResp::err(6, e);
-            }
-            if let Err(e) = state.reset_execute() {
-                return ApiResp::err(6, e);
-            }
-            ApiResp::ok("读取成功")
-        }
-        0 => ApiResp::err(3, "文件不能为空"),
-        -1 => ApiResp::err(4, "文件应至少有2行"),
-        2 => ApiResp::err(5, "文件表头存在重复"),
-        _ => ApiResp::err(6, "无法识别的表格格式"),
+    if TEXT_EXTS.contains(&ext.as_str()) {
+        let text = match read_text_file(&path) {
+            Ok(t) => t,
+            Err(e) => return ApiResp::err(6, e),
+        };
+        return save_sheet(sheet_from_text(&text), &state);
     }
+
+    ApiResp::err(
+        2,
+        "提交失败，不能读取该格式文件，请选择(.xlsx)(.xlsm)(.xltx)(.xltm)(.csv)(.json)文件",
+    )
+}
+
+/// 提交一段表格文本（粘贴的表格 / Markdown 表格）
+///
+/// 返回值与 [`submit_excel_path`] 相同，只是不检查文件是否存在
+#[tauri::command]
+pub fn submit_table_text(text: String, state: State<AppState>) -> ApiResp {
+    if text.trim().is_empty() {
+        return ApiResp::err(3, "内容不能为空");
+    }
+    save_sheet(sheet_from_text(&text), &state)
 }
 
 // ---------------------------------------------------------------- 第二步：关键字
@@ -131,6 +177,12 @@ pub fn submit_data(data: Vec<ColData>, state: State<AppState>) -> ApiResp {
 }
 
 // ---------------------------------------------------------------- 第三步：命名格式
+
+/// 判断路径是否是一个文件夹（第三步拖拽选择文件夹时用来校验拖进来的是目录还是文件）
+#[tauri::command]
+pub fn is_dir(path: String) -> bool {
+    PathBuf::from(trim_path(&path)).is_dir()
+}
 
 /// 接收要改名的文件夹路径并生成新旧名字对照
 ///
@@ -190,18 +242,29 @@ pub fn submit_execute(path: String, execute: Vec<ExecuteItem>, state: State<AppS
 }
 
 /// 用关键字匹配一个文件名，返回它对应的新名字下标
+///
+/// 同一个文件名往往能在多个关键字里匹配上：像「序号」这类很短的值
+/// （正则 `1` 能匹配几乎所有文件名）会盖住真正有用的关键字，
+/// 所以这里取「匹配到的片段最长」的那一行，最长才算最具体；
+/// 长度相同时保留排在前面的关键字（`keywords` 已按优先级排好序）。
 fn find_key(keywords: &[ColData], new_len: usize, file_name: &str) -> Option<usize> {
+    let mut best: Option<(usize, usize)> = None;
     for kw in keywords {
         for (k, value) in kw.values.iter().enumerate() {
             if value.is_empty() || k >= new_len {
                 continue;
             }
-            if compile(value).is_match(file_name) {
-                return Some(k);
+            let Some(m) = compile(value).find(file_name) else {
+                continue;
+            };
+            let len = m.as_str().len();
+            match best {
+                Some((best_len, _)) if best_len >= len => {}
+                _ => best = Some((len, k)),
             }
         }
     }
-    None
+    best.map(|(_, k)| k)
 }
 
 /// 根据表格数据、命名格式和目录中的文件名，计算新名字与新旧名字对照
@@ -213,7 +276,15 @@ fn build_execute(
     old: &[String],
 ) -> Result<(Vec<ColData>, Vec<String>, Vec<i32>, Vec<NamePair>), ApiResp> {
     // 为关键字排序：重复次数越少优先级越高
-    let mut keywords: Vec<ColData> = data.iter().filter(|c| c.is_key_word).cloned().collect();
+    //
+    // 序号、性别这类列虽然可以被选进命名格式，但不适合用来匹配文件：
+    // 比如序号 1 的正则能匹配几乎所有文件名，会让所有文件都落到第一行，
+    // 所以匹配时要把它们筛掉（它们仍然会出现在新名字里）
+    let mut keywords: Vec<ColData> = data
+        .iter()
+        .filter(|c| c.is_key_word && is_match_worthy(c))
+        .cloned()
+        .collect();
     keywords.sort_by_key(|c| c.delta);
 
     // 生成新名字列表
@@ -405,6 +476,7 @@ pub fn rescan(state: State<AppState>) -> ApiResp {
             new_name = format!("{}({}){}", exec.new[k], n, suffix);
         }
         exists.insert(new_name.clone());
+        used.insert(new_name.clone());
         jobs.push((name.clone(), new_name));
     }
 
@@ -427,8 +499,21 @@ pub fn rescan(state: State<AppState>) -> ApiResp {
         }
     }
 
+    // 已经改名时目录里放的是新名字，而对照表记的是改名前的文件名。
+    // 「未知」= 目录里没匹配上任何关键字的文件，所以这里要存「改名前的名字」，
+    // 再加上那些没匹配上、一直没动过的文件
+    let unmatched: Vec<String> = current
+        .iter()
+        .filter(|name| !used.contains(*name))
+        .cloned()
+        .collect();
+
+    let mut old: Vec<String> = list.iter().map(|pair| pair.old.clone()).collect();
+    old.extend(unmatched);
+    old.sort();
+
     exec.map = map;
-    exec.old = current;
+    exec.old = old;
     exec.list = list;
     if let Err(e) = state.set_execute(exec) {
         return ApiResp::err(7, e);
@@ -786,6 +871,79 @@ mod tests {
 
     fn read(dir: &Path, name: &str) -> String {
         std::fs::read_to_string(dir.join(name)).unwrap()
+    }
+
+    fn col(key: &str, values: &[&str], delta: usize) -> ColData {
+        ColData {
+            key: key.to_string(),
+            values: values.iter().map(|v| v.to_string()).collect(),
+            is_key_word: true,
+            display: true,
+            reason: "该项适合做关键字".to_string(),
+            delta,
+        }
+    }
+
+    /// 序号这种很短的值（正则 `1` 能匹配几乎所有文件名）不能盖住学号
+    #[test]
+    fn find_key_prefers_longest_match() {
+        let keywords = vec![
+            col("序号", &["1", "2", "9"], 0),
+            col(
+                "学号",
+                &["201604020242", "201704020207", "201904020207"],
+                0,
+            ),
+        ];
+        // 三个序号值都能在文件名里匹配到，但学号匹配得最长，应当选学号那一行
+        assert_eq!(find_key(&keywords, 3, "201904020207-甘.png"), Some(2));
+        assert_eq!(find_key(&keywords, 3, "9-201904020207-甘.png"), Some(2));
+        assert_eq!(find_key(&keywords, 3, "没有匹配.txt"), None);
+    }
+
+    /// 一样长时保留优先级更高（排序在前）的关键字所在的行
+    #[test]
+    fn find_key_keeps_priority_on_tie() {
+        let keywords = vec![col("高优先级", &["2019"], 0), col("低优先级", &["0207"], 0)];
+        assert_eq!(find_key(&keywords, 1, "201904020207-甘.png"), Some(0));
+    }
+
+    /// 序号列不参与匹配：否则所有文件都会被它匹配到第一行
+    #[test]
+    fn build_execute_skips_index_like_keyword() {
+        let data = vec![
+            col("序号", &["1", "2", "3", "4"], 0),
+            col(
+                "学号",
+                &["201604020242", "201704020207", "201904020207", "201904020219"],
+                0,
+            ),
+            // 重复值太多的列（性别）同样不参与匹配
+            col("性别", &["男", "男", "男", "男"], 3),
+        ];
+        let execute = vec![
+            ExecuteItem::Index(0),
+            ExecuteItem::Text("-".to_string()),
+            ExecuteItem::Index(1),
+        ];
+        let old = vec![
+            "201904020207-甘.png".to_string(),
+            "201904020218.png".to_string(),
+        ];
+        let (keywords, new, map, list) = build_execute(&data, &execute, &old).unwrap();
+
+        assert_eq!(
+            keywords.iter().map(|c| c.key.as_str()).collect::<Vec<_>>(),
+            vec!["学号"]
+        );
+        // 命名格式里的序号照旧出现在新名字里
+        assert_eq!(new[2], "3-201904020207");
+        // 文件匹配到学号对应的那一行，而不是第一行
+        assert_eq!(map, vec![0, 0, 1, 0]);
+        // 表格里没有 201904020218，这个文件匹配不上，也不会被算到别人头上
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].old, "201904020207-甘.png");
+        assert_eq!(list[0].new, "3-201904020207.png");
     }
 
     #[test]
