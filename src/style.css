@@ -31,6 +31,32 @@
     body {
         font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
     }
+
+    /* 全局禁止文字选中/复制 */
+    html,
+    body,
+    #app * {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+
+    /* 输入框等可编辑区域恢复可选中、可复制 */
+    input,
+    textarea,
+    select,
+    [contenteditable=''],
+    [contenteditable='true'],
+    .el-textarea__inner,
+        /* 如需局部放开，给元素加 class="selectable" */
+    .selectable,
+    .selectable * {
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
+    }
 }
 
 @layer components {
@@ -57,7 +83,7 @@
         color: #409eff;
         font-size: 11px;
         font-weight: 600;
-        letter-spacing: 1px;
+        letter-spacing: 0.6px;
     }
 
     .page-title {
@@ -69,7 +95,7 @@
 
     .page-desc {
         margin: 0;
-        font-size: 14px;
+        font-size: 13.5px;
         line-height: 1.6;
         color: #5f6575;
     }
