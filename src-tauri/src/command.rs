@@ -178,6 +178,12 @@ pub fn submit_data(data: Vec<ColData>, state: State<AppState>) -> ApiResp {
 
 // ---------------------------------------------------------------- 第三步：命名格式
 
+/// 判断路径是否是一个文件夹（第三步拖拽选择文件夹时用来校验拖进来的是目录还是文件）
+#[tauri::command]
+pub fn is_dir(path: String) -> bool {
+    PathBuf::from(trim_path(&path)).is_dir()
+}
+
 /// 接收要改名的文件夹路径并生成新旧名字对照
 ///
 /// 返回值：

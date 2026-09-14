@@ -18,6 +18,9 @@ export const submitTableText = (text: string) =>
 /** 提交关键字配置 */
 export const submitData = (data: ColData[]) => invoke<ApiResp>('submit_data', {data})
 
+/** 判断路径是否是一个文件夹（拖拽选择文件夹时校验用） */
+export const isDir = (path: string) => invoke<boolean>('is_dir', { path })
+
 /** 提交要改名的文件夹路径与命名格式 */
 export const submitExecute = (path: string, execute: ExecuteItem[]) =>
     invoke<ApiResp>('submit_execute', {path, execute})

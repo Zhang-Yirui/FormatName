@@ -40,6 +40,7 @@ pub fn run() {
             command::submit_excel_path,
             command::submit_table_text,
             command::submit_data,
+            command::is_dir,
             command::submit_execute,
             command::get_execute,
             command::rescan,
