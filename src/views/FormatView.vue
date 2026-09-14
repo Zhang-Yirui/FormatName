@@ -18,8 +18,10 @@ const DEFAULT_SEP = '-'
 const picked = ref<ExecuteItem[]>(initPicked())
 /** 是否统一分隔符 */
 const same = ref(true)
-/** 统一的分隔符 */
+/** 统一的分隔符（选中的选项值） */
 const sep = ref(DEFAULT_SEP)
+/** 自定义分隔符内容 */
+const customSep = ref('')
 /** 要改名的文件夹 */
 const path = ref('')
 const loading = ref(false)
@@ -44,19 +46,40 @@ function initPicked(): ExecuteItem[] {
   return items
 }
 
-const SEPARATORS: { label: string; value: string }[] = [
-  { label: '无', value: '' },
-  { label: '-', value: '-' },
-  { label: '空格', value: ' ' },
+/** 统一分隔符中的“自定义”选项标识 */
+const CUSTOM = '__custom__'
+
+interface SepOption {
+  label: string
+  value: string
+  tip: string
+}
+
+const SEPARATORS: SepOption[] = [
+  { label: '无', value: '', tip: '不使用分隔符，各字段直接拼接' },
+  { label: '-', value: '-', tip: '连字符' },
+  { label: '_', value: '_', tip: '下划线' },
+  { label: '+', value: '+', tip: '加号' },
+  { label: '␣', value: ' ', tip: '空格' },
+  { label: '.', value: '.', tip: '点号' },
 ]
+
+/** 统一分隔符可选值（多一个“自定义”） */
+const SEP_OPTIONS: SepOption[] = [
+  ...SEPARATORS,
+  { label: '自定义', value: CUSTOM, tip: '自定义分隔符，可输入任意字符' },
+]
+
+/** 当前生效的分隔符 */
+const activeSep = computed(() => (sep.value === CUSTOM ? customSep.value : sep.value))
 
 function applySep() {
   for (let i = 1; i < picked.value.length; i += 2) {
-    picked.value[i] = sep.value
+    picked.value[i] = activeSep.value
   }
 }
 
-watch(sep, () => {
+watch([sep, customSep], () => {
   if (same.value) applySep()
 })
 
@@ -69,7 +92,7 @@ function increase() {
     ElMessage.warning('哥，不至于！')
     return
   }
-  picked.value.push(sep.value, 0)
+  picked.value.push(activeSep.value, 0)
 }
 
 function decrease() {
@@ -129,7 +152,7 @@ async function submit() {
     const res = await submitExecute(path.value.trim(), picked.value)
     if (res.code === 0) {
       ElMessage.success(res.msg)
-      router.push('/analysis')
+      await router.push('/analysis')
     } else {
       ElMessage.error(res.msg)
     }
@@ -230,13 +253,24 @@ async function submit() {
         </el-checkbox>
         <template v-if="same">
           <span class="text-sm text-slate-500">为：</span>
-          <el-radio-group v-model="sep">
-            <el-radio-button v-for="s in SEPARATORS" :key="s.label" :value="s.value">
-              {{ s.label }}
-            </el-radio-button>
+          <el-radio-group v-model="sep" class="flex-wrap gap-y-2">
+            <el-tooltip
+                v-for="s in SEP_OPTIONS"
+                :key="s.label"
+                :content="s.tip"
+                placement="top"
+                :show-after="100"
+            >
+              <el-radio-button :value="s.value">{{ s.label }}</el-radio-button>
+            </el-tooltip>
           </el-radio-group>
-          <span class="text-sm text-slate-500">或自定义</span>
-          <el-input v-model="sep" size="small" class="!w-24" />
+          <el-input
+              v-if="sep === CUSTOM"
+              v-model="customSep"
+              size="small"
+              class="!w-32"
+              placeholder="输入分隔符"
+          />
         </template>
       </div>
 

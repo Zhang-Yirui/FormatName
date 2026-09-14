@@ -46,7 +46,7 @@ async function submit() {
     const res = await submitData(columns.value)
     if (res.code === 0) {
       ElMessage.success(res.msg)
-      router.push('/format')
+      await router.push('/format')
     } else {
       ElMessage.error(res.msg)
     }
@@ -91,6 +91,8 @@ async function submit() {
             :prop="String(index)"
             :label="col.key"
             min-width="140"
+            align="center"
+            header-align="center"
         >
           <template #header>
             <el-tooltip :content="col.reason" placement="top" effect="dark">
