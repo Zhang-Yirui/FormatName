@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import {computed, onMounted, onUnmounted, ref} from 'vue'
-import {useRouter} from 'vue-router'
-import {open} from '@tauri-apps/plugin-dialog'
-import {getCurrentWebview} from '@tauri-apps/api/webview'
-import {ElMessage} from 'element-plus'
-import {FolderOpened, Right} from '@element-plus/icons-vue'
-import {submitExcelPath, submitTableText} from '@/api'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
+import { useRouter } from 'vue-router'
+import { open } from '@tauri-apps/plugin-dialog'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { ElMessage } from 'element-plus'
+import { FolderOpened, Right } from '@element-plus/icons-vue'
+import { renameHeader, submitExcelPath, submitTableText } from '@/api'
 import {EXCEL_EXT, STEPS, TEXT_EXT} from '@/constant'
 import {columns, loadColumns, resetStep} from '@/store'
 
@@ -40,7 +41,7 @@ const hasData = computed(() => columns.value.length > 0 && rowCount.value > 0)
 
 /** 列数据转换成 el-table 需要的行数据 */
 const rows = computed(() =>
-    Array.from({length: rowCount.value}, (_, i) => {
+    Array.from({ length: rowCount.value }, (_, i) => {
       const row: Record<string, string> = {}
       columns.value.forEach((col, j) => {
         row[String(j)] = col.values[i] ?? ''
@@ -53,8 +54,80 @@ function extOf(name: string): string {
   return name.slice(name.lastIndexOf('.') + 1).toLowerCase()
 }
 
+/* ==================== 修改表头 ==================== */
+/** 正在编辑表头的列序号，null 表示没有在编辑 */
+const editingIndex = ref<number | null>(null)
+/** 编辑框里的表头名称 */
+const draft = ref('')
+/** 编辑框元素，用来自动聚焦 */
+let editor: HTMLInputElement | null = null
+/** 上一次改名还在保存中 */
+let saving = false
+
+function bindEditor(el: Element | ComponentPublicInstance | null) {
+  editor = (el as HTMLInputElement | null) ?? null
+}
+
+/** 双击表头进入编辑 */
+async function startEdit(index: number) {
+  // 正在编辑另一列时先把那一列保存掉
+  if (editingIndex.value !== null) await commitEdit()
+  const col = columns.value[index]
+  if (!col) return
+  editingIndex.value = index
+  draft.value = col.key
+  await nextTick()
+  editor?.focus()
+  editor?.select()
+}
+
+function cancelEdit() {
+  editingIndex.value = null
+  draft.value = ''
+}
+
+/** 确认修改：校验后写入数据库，失败则保持原来的表头 */
+async function commitEdit() {
+  if (saving) return
+  const index = editingIndex.value
+  if (index === null) return
+
+  const col = columns.value[index]
+  if (!col) {
+    cancelEdit()
+    return
+  }
+  const name = draft.value.trim()
+  if (!name || name === col.key) {
+    cancelEdit()
+    return
+  }
+  if (columns.value.some((c, i) => i !== index && c.key === name)) {
+    ElMessage.warning(`已存在名为「${name}」的表头，请换一个名称`)
+    cancelEdit()
+    return
+  }
+
+  cancelEdit()
+  saving = true
+  try {
+    const res = await renameHeader(index, name)
+    if (res.code !== 0) {
+      ElMessage.error(res.msg)
+      return
+    }
+    columns.value[index].key = name
+    ElMessage.success(res.msg)
+  } catch (e) {
+    ElMessage.error(`保存失败：${e}`)
+  } finally {
+    saving = false
+  }
+}
+
 /** 导入成功后刷新列数据，并让后面的步骤重新走一遍 */
 async function afterImport(name: string) {
+  cancelEdit()
   sourceName.value = name
   imported.value = true
   columns.value = await loadColumns(true)
@@ -129,9 +202,9 @@ async function pickFile() {
       directory: false,
       title: '选择花名册',
       filters: [
-        {name: '表格文件', extensions: [...ALL_EXT]},
-        {name: 'Excel 表格', extensions: [...EXCEL_EXT]},
-        {name: '文本表格', extensions: [...TEXT_EXT]},
+        { name: '表格文件', extensions: [...ALL_EXT] },
+        { name: 'Excel 表格', extensions: [...EXCEL_EXT] },
+        { name: '文本表格', extensions: [...TEXT_EXT] },
       ],
     })
   } catch {
@@ -169,7 +242,7 @@ onMounted(async () => {
 
   // 监听 Tauri 原生文件拖拽事件（可以拿到文件的完整路径）
   try {
-    unlistenDragDrop = await getCurrentWebview().onDragDropEvent(({payload}) => {
+    unlistenDragDrop = await getCurrentWebview().onDragDropEvent(({ payload }) => {
       if (payload.type === 'enter' || payload.type === 'over') {
         dragging.value = true
       } else if (payload.type === 'drop') {
@@ -194,8 +267,8 @@ onUnmounted(() => unlistenDragDrop?.())
   <div class="page-view">
     <div class="page-header">
       <div>
-        <h1 class="page-title">{{ STEPS[0].desc }}</h1>
-        <p class="page-desc">{{ STEPS[0].hint }}</p>
+        <h1 class="page-title">{{STEPS[0].desc}}</h1>
+        <p class="page-desc">{{STEPS[0].hint}}</p>
       </div>
     </div>
 
@@ -234,6 +307,7 @@ onUnmounted(() => unlistenDragDrop?.())
         <div class="mt-5 flex items-center justify-between">
           <span class="text-[13px] font-semibold text-slate-700">
             表格数据
+            <span class="ml-2 text-[11.5px] font-normal text-slate-400">双击表头可修改名称</span>
             <span v-if="sourceName" class="ml-2 text-[11.5px] font-normal text-slate-400">
               {{ sourceName }}
             </span>
@@ -259,7 +333,28 @@ onUnmounted(() => unlistenDragDrop?.())
               header-align="center"
               min-width="120"
               show-overflow-tooltip
-          />
+          >
+            <template #header>
+              <input
+                  v-if="editingIndex === index"
+                  :ref="bindEditor"
+                  v-model="draft"
+                  class="header-input"
+                  maxlength="50"
+                  @keydown.enter.prevent="commitEdit"
+                  @keydown.esc.prevent="cancelEdit"
+                  @blur="commitEdit"
+              />
+              <span
+                  v-else
+                  class="header-text"
+                  :title="`${col.key}（双击修改）`"
+                  @dblclick="startEdit(index)"
+              >
+                {{ col.key }}
+              </span>
+            </template>
+          </el-table-column>
         </el-table>
       </template>
       <p v-else class="mt-5 text-center text-[13px] text-slate-400">尚未导入表格数据，请先选择或拖入表格文件</p>
@@ -291,8 +386,9 @@ onUnmounted(() => unlistenDragDrop?.())
   border-radius: 12px;
   background: #fafbfc;
   text-align: center;
-  transition: border-color 0.2s ease,
-  background-color 0.2s ease;
+  transition:
+      border-color 0.2s ease,
+      background-color 0.2s ease;
 }
 
 .drop-zone.is-dragover {
@@ -320,6 +416,24 @@ onUnmounted(() => unlistenDragDrop?.())
 
 .hidden-input {
   display: none;
+}
+
+/* 表头：双击进入编辑 */
+.header-text {
+  cursor: text;
+}
+
+.header-input {
+  width: 100%;
+  padding: 2px 6px;
+  border: 1px solid var(--el-color-primary, #409eff);
+  border-radius: 4px;
+  background: #fff;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  text-align: center;
+  outline: none;
 }
 
 </style>

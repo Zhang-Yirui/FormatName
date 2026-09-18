@@ -39,6 +39,7 @@ pub fn run() {
             command::get_data,
             command::submit_excel_path,
             command::submit_table_text,
+            command::rename_header,
             command::submit_data,
             command::is_dir,
             command::submit_execute,

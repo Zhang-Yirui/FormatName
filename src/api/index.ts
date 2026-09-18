@@ -1,7 +1,7 @@
 import {invoke} from '@tauri-apps/api/core'
 import type {ApiResp, AppInfoResp, ColData, ExecuteItem, ExecuteResp} from '@/types'
 
-/** 获取 APP 信息, 包含用用名称、版本号、描述、作者信息 */
+/** 获取 APP 信息, 包含应用名称、版本号、描述、作者信息 */
 export const getAppInfo = () => invoke<AppInfoResp>('get_app_info')
 
 /** 获取当前程序的数据（Excel 解析后的列数据） */
@@ -11,9 +11,13 @@ export const getData = () => invoke<ColData[]>('get_data')
 export const submitExcelPath = (path: string) =>
     invoke<ApiResp>('submit_excel_path', {path})
 
-/** 提交表格文本 */
+/** 提交表格文本（粘贴的表格 / Markdown 表格） */
 export const submitTableText = (text: string) =>
     invoke<ApiResp>('submit_table_text', {text})
+
+/** 修改第 index 列的表头名称 */
+export const renameHeader = (index: number, key: string) =>
+    invoke<ApiResp>('rename_header', {index, key})
 
 /** 提交关键字配置 */
 export const submitData = (data: ColData[]) => invoke<ApiResp>('submit_data', {data})

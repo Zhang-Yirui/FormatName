@@ -164,6 +164,63 @@ pub fn submit_table_text(text: String, state: State<AppState>) -> ApiResp {
     save_sheet(sheet_from_text(&text), &state)
 }
 
+/// 修改某一列的表头名称，并写入数据库
+///
+/// 表头只在展示与界面提示里用到，匹配文件与生成新名字都按列序号取值，
+/// 所以改名不会影响已经配置好的关键字与命名格式。
+///
+/// 返回值：
+/// - 0：修改成功
+/// - 1：列不存在
+/// - 2：表头不能为空
+/// - 3：表头与其他列重复
+/// - 4：保存失败
+#[tauri::command]
+pub fn rename_header(index: usize, key: String, state: State<AppState>) -> ApiResp {
+    let mut config = state.get_config();
+    let key = key.trim().to_string();
+
+    // 校验阶段只做只读访问，避免和后面的改名（可变借用）冲突
+    let Some(col) = config.data.get(index) else {
+        return ApiResp::err(1, "该列不存在，请重新导入表格");
+    };
+    if key.is_empty() {
+        return ApiResp::err(2, "表头不能为空");
+    }
+    if key == col.key {
+        return ApiResp::ok("表头未变化");
+    }
+    if config
+        .data
+        .iter()
+        .enumerate()
+        .any(|(i, c)| i != index && c.key == key)
+    {
+        return ApiResp::err(3, format!("已存在名为「{}」的表头，请换一个名称", key));
+    }
+
+    let old = std::mem::replace(&mut config.data[index].key, key.clone());
+    if let Err(e) = state.set_config(config) {
+        return ApiResp::err(4, e);
+    }
+
+    // 关键字是提交命名格式时留下的一份副本，表头改了这里要跟着改，
+    // 否则后面按名字查找时会对不上（匹配本身用的是列值，不受影响）
+    let mut exec = state.get_execute();
+    if !exec.path.is_empty() && exec.data.iter().any(|c| c.key == old) {
+        for col in &mut exec.data {
+            if col.key == old {
+                col.key = key.clone();
+            }
+        }
+        if let Err(e) = state.set_execute(exec) {
+            return ApiResp::err(4, e);
+        }
+    }
+
+    ApiResp::ok("表头已更新")
+}
+
 // ---------------------------------------------------------------- 第二步：关键字
 
 /// 提交关键字配置
