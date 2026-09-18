@@ -6,7 +6,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, FolderOpened, RefreshRight } from '@element-plus/icons-vue'
 import { isDir, submitExecute } from '@/api'
-import { columns } from '@/store'
+import { columns, executePath } from '@/store'
 import type { ExecuteItem } from '@/types'
 import { STEPS } from '@/constant'
 
@@ -102,6 +102,11 @@ const customConnectors = ref<string[]>([])
 /** 要改名的文件夹 */
 const path = ref('')
 const loading = ref(false)
+
+/** 输入框里的路径同步到全局，离开本页面后回来可以直接回填 */
+watch(path, (val) => {
+  executePath.value = val.trim()
+})
 
 /** 当前生效的分隔符 */
 const activeSep = computed(() => (sep.value === CUSTOM ? customSep.value : sep.value))
@@ -325,6 +330,20 @@ async function pickDir() {
   }
 }
 
+/** 回到本页面时，之前选过的文件夹如果还在，直接填进输入框 */
+async function restorePath() {
+  const saved = executePath.value.trim()
+  if (!saved) return
+  let exists = true
+  try {
+    exists = await isDir(saved)
+  } catch {
+    /* is_dir 命令不可用时不做拦截，交给提交时由后端校验 */
+  }
+  if (exists) path.value = saved
+  else executePath.value = ''
+}
+
 /* ==================== 拖拽选择文件夹 ==================== */
 /* 与第一步导入 Excel 一样走 Tauri 原生拖拽事件：只有原生事件能拿到完整路径，
    浏览器给的 File 只有文件名。原生事件是窗口级的，所以要按落点判断是不是拖在
@@ -384,6 +403,9 @@ async function setDroppedDir(p: string, inside: boolean) {
 }
 
 onMounted(async () => {
+  // 从关键字页 / 分析页回到这里时，把上次选过的文件夹填回输入框
+  void restorePath()
+
   try {
     unlistenDragDrop = await getCurrentWebview().onDragDropEvent(({ payload }) => {
       // position 缺失时按 (-1,-1) 处理，此时坐标不可信，会退化为“拖到哪都接收”

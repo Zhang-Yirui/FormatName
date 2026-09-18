@@ -1,11 +1,13 @@
-import {ref} from 'vue'
-import type {ColData} from '@/types'
-import {getData} from '@/api'
+import { ref } from 'vue'
+import type { ColData } from '@/types'
+import { getData } from '@/api'
 
 /** Excel 解析出来的列数据 */
 export const columns = ref<ColData[]>([])
 /** 是否已经从后端加载过 */
 export const loaded = ref(false)
+/** 选择的待改名文件夹路径：跨页面保留，回到命名格式页时回填到输入框 */
+export const executePath = ref('')
 
 /** 加载列数据，force 为 true 时强制刷新 */
 export async function loadColumns(force = false): Promise<ColData[]> {
@@ -33,5 +35,6 @@ export function resetStep(step = 0) {
 export function resetColumns() {
     columns.value = []
     loaded.value = false
+    executePath.value = ''
     resetStep(0)
 }

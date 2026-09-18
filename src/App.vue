@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { RefreshLeft } from '@element-plus/icons-vue'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import {
+  IconBrandGithub,
   IconHelpHexagon,
   IconInfoHexagon,
   IconMoon,
@@ -106,10 +107,6 @@ onUnmounted(() => {
 
 const route = useRoute()
 const router = useRouter()
-
-/** 步骤配置：顺序即步骤序号（0 起） */
-// const steps = STEPS
-
 const activeStep = computed(() => Number(route.meta.step ?? 0))
 const keywordCount = computed(() => columns.value.filter((c) => c.isKeyWord).length)
 const hint = computed(() => STEPS[activeStep.value].hint ?? '')
@@ -271,7 +268,7 @@ async function reset() {
       </el-aside>
 
       <el-container class="flex h-full min-w-0 flex-col">
-        <!-- 左上： -->
+        <!-- 左上：时间和日期 -->
         <el-header class="flex h-18 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 py-19">
           <div class="mr-auto flex min-w-0 items-center gap-3">
             <span class="fn-header-title text-[30px] font-bold tabular-nums tracking-wide text-slate-800">
@@ -288,6 +285,9 @@ async function reset() {
           <div class="header-actions ml-4 shrink-0">
             <el-tooltip :content="dark ? '切换亮色模式' : '切换暗色模式'" placement="bottom">
               <el-button :icon="dark ? tablerIcon(IconMoon) : tablerIcon(IconSun)" circle @click="dark = !dark"/>
+            </el-tooltip>
+            <el-tooltip content="仓库" placement="bottom">
+              <el-button :icon="tablerIcon(IconBrandGithub)" circle @click="openLink(appInfo.repository)" />
             </el-tooltip>
             <el-tooltip content="使用手册" placement="bottom">
               <el-button :icon="tablerIcon(IconHelpHexagon)" circle @click="openLink(appInfo.homepage)" />
