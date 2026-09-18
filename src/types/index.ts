@@ -19,6 +19,31 @@ export interface ColData {
 /** 命名格式中的一项：列序号 / 空占位 / 自定义文本 */
 export type ExecuteItem = number | null | string
 
+/** 命名段类型：字段 / 分隔符 / 自定义文本 */
+export type SegType = 'keyword' | 'connector' | 'custom'
+
+/** 命名构建区中的一个命名段 */
+export interface RuleSegment {
+    /** 仅用于列表渲染与拖拽，不参与改名 */
+    id: string
+    type: SegType
+    /** keyword 为列序号，connector / custom 为文本 */
+    value: number | string
+}
+
+/** 命名规则：构建区内容 + 分隔符设置，跨页面保留，回到命名格式页时原样回填 */
+export interface FormatRule {
+    segments: RuleSegment[]
+    /** 是否统一分隔符 */
+    same: boolean
+    /** 统一分隔符选中的选项值 */
+    sep: string
+    /** 自定义分隔符内容 */
+    customSep: string
+    /** 已添加过的自定义连接符 */
+    customConnectors: string[]
+}
+
 /** 统一接口返回结构 */
 export interface ApiResp {
     code: number

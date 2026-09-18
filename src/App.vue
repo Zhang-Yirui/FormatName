@@ -14,7 +14,7 @@ import {
 import { SolarDay } from 'tyme4ts'
 import { clearData, getAppInfo } from '@/api'
 import {EXCEL_EXT, STEPS, TEXT_EXT} from '@/constant'
-import { columns, maxStep, resetColumns } from '@/store'
+import { applyFormatRule, columns, maxStep, resetColumns, ruleChanged } from '@/store'
 import type { AppInfoResp } from '@/types'
 import { tablerIcon } from '@/utils/tablerIcon'
 
@@ -188,6 +188,15 @@ async function go(index: number) {
   if (!unlocked(index)) {
     ElMessage.warning('请先完成当前步骤，点击“提交”后才能进入后面的步骤')
     return
+  }
+  // 直接点步骤四：规则改过就先提交生效，否则看到的还是上一次的对照结果
+  if (STEPS[index]?.path === '/analysis' && ruleChanged()) {
+    const res = await applyFormatRule()
+    if (!res.ok) {
+      ElMessage.error(res.msg)
+      return
+    }
+    ElMessage.success('命名规则已更新')
   }
   await router.push(STEPS[index]!.path)
 }

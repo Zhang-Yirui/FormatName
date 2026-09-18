@@ -5,9 +5,9 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, FolderOpened, RefreshRight } from '@element-plus/icons-vue'
-import { isDir, submitExecute } from '@/api'
-import { columns, executePath } from '@/store'
-import type { ExecuteItem } from '@/types'
+import { isDir } from '@/api'
+import { applyFormatRule, columns, executePath, formatRule } from '@/store'
+import type { ExecuteItem, RuleSegment } from '@/types'
 import { STEPS } from '@/constant'
 
 const router = useRouter()
@@ -17,15 +17,7 @@ const DEFAULT_SEP = '-'
 /** 统一分隔符中的“自定义”选项标识 */
 const CUSTOM = '__custom__'
 
-/** 命名段类型：字段 / 分隔符 / 自定义文本 */
-type SegType = 'keyword' | 'connector' | 'custom'
-
-interface Segment {
-  id: string
-  type: SegType
-  /** keyword 为列序号，connector / custom 为文本 */
-  value: number | string
-}
+type Segment = RuleSegment
 
 interface SepOption {
   label: string
@@ -103,6 +95,31 @@ const customConnectors = ref<string[]>([])
 const path = ref('')
 const loading = ref(false)
 
+/** 从分析页回到这里时，把上次构建好的规则原样回填 */
+function restoreRule() {
+  const saved = formatRule.value
+  if (!saved) return
+  // id 只用于列表渲染，重新生成以免和本次新增的段撞号
+  segments.value = saved.segments.map((s) => ({ id: newId(), type: s.type, value: s.value }))
+  same.value = saved.same
+  sep.value = saved.sep
+  customSep.value = saved.customSep
+  customConnectors.value = [...saved.customConnectors]
+}
+restoreRule()
+
+/** 把当前规则写入全局：回到本页面时回填，跳转步骤四时据此判断是否需要自动生效 */
+function syncRule() {
+  formatRule.value = {
+    segments: segments.value.map((s) => ({ id: s.id, type: s.type, value: s.value })),
+    same: same.value,
+    sep: sep.value,
+    customSep: customSep.value,
+    customConnectors: [...customConnectors.value],
+  }
+}
+watch([segments, same, sep, customSep, customConnectors], syncRule, { deep: true, immediate: true })
+
 /** 输入框里的路径同步到全局，离开本页面后回来可以直接回填 */
 watch(path, (val) => {
   executePath.value = val.trim()
@@ -110,9 +127,6 @@ watch(path, (val) => {
 
 /** 当前生效的分隔符 */
 const activeSep = computed(() => (sep.value === CUSTOM ? customSep.value : sep.value))
-
-/** 提交给后端的命名格式 */
-const picked = computed<ExecuteItem[]>(() => segments.value.map((s) => s.value))
 
 function applySep() {
   segments.value.forEach((s) => {
@@ -164,6 +178,17 @@ function removeSegment(index: number) {
 
 function clearSegments() {
   segments.value = []
+}
+
+/** 重置为初始规则：按当前关键字重新生成，分隔符设置一并回到默认 */
+function resetSegments() {
+  segments.value = initSegments()
+  same.value = true
+  sep.value = DEFAULT_SEP
+  customSep.value = ''
+  customConnectorInput.value = ''
+  customTextInput.value = ''
+  customConnectors.value = []
 }
 
 /* ==================== 拖拽 ==================== */
@@ -444,15 +469,16 @@ async function submit() {
   }
   loading.value = true
   try {
-    const res = await submitExecute(path.value.trim(), picked.value)
-    if (res.code === 0) {
+    // 先落库再提交，避免最后一次改动还没同步到全局
+    syncRule()
+    executePath.value = path.value.trim()
+    const res = await applyFormatRule(executePath.value)
+    if (res.ok) {
       ElMessage.success(res.msg)
       await router.push('/analysis')
     } else {
       ElMessage.error(res.msg)
     }
-  } catch (e) {
-    ElMessage.error(`提交失败：${e}`)
   } finally {
     loading.value = false
   }
@@ -597,6 +623,9 @@ async function submit() {
               <div class="flex items-center gap-2">
                 <span class="text-[11.5px] text-slate-400">拖入或双击左侧项，拖动可排序</span>
                 <el-button size="small" plain @click="addConnector(activeSep)">+ 分隔符</el-button>
+                <el-button size="small" plain :icon="RefreshRight" @click="resetSegments">
+                  重置
+                </el-button>
                 <el-button
                     size="small"
                     type="danger"

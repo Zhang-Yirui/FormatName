@@ -8,7 +8,7 @@ import { ElMessage } from 'element-plus'
 import { FolderOpened, Right } from '@element-plus/icons-vue'
 import { renameHeader, submitExcelPath, submitTableText } from '@/api'
 import {EXCEL_EXT, STEPS, TEXT_EXT} from '@/constant'
-import {columns, loadColumns, resetStep} from '@/store'
+import {columns, loadColumns, resetRule, resetStep} from '@/store'
 
 const ALL_EXT = [...EXCEL_EXT, ...TEXT_EXT]
 
@@ -131,6 +131,8 @@ async function afterImport(name: string) {
   sourceName.value = name
   imported.value = true
   columns.value = await loadColumns(true)
+  // 换了一份表格，旧的命名规则里的列序号已经对不上了
+  resetRule()
   resetStep(1)
 }
 
