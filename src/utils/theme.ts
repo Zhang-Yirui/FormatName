@@ -1,4 +1,5 @@
 import { ref, watch } from 'vue'
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 
 const STORAGE_KEY = 'formatname:dark'
 
@@ -19,9 +20,19 @@ function readStored(): boolean | null {
 /** 是否处于暗色模式，初始值：本地偏好 > 系统偏好 */
 export const isDark = ref(readStored() ?? mql?.matches ?? false)
 
+/** 同步原生窗口（标题栏等）主题；浏览器调试环境没有 Tauri 窗口，失败时忽略 */
+function syncWindowTheme(dark: boolean) {
+    getCurrentWebviewWindow()
+        .setTheme(dark ? 'dark' : 'light')
+        .catch(() => {
+            /* 非 Tauri 环境忽略 */
+        })
+}
+
 /** 把状态同步到 <html class="dark">，同时驱动 Tailwind 的 dark: 与 Element Plus 暗色变量 */
 function apply(dark: boolean) {
     document.documentElement.classList.toggle('dark', dark)
+    syncWindowTheme(dark)
 }
 
 /** 切换亮/暗，并写入本地偏好 */
