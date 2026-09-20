@@ -449,13 +449,13 @@ async function submit() {
       </el-button>
     </div>
 
-    <el-card shadow="never" class="!rounded-2xl">
+    <el-card shadow="never" class="!rounded-2xl dark:bg-slate-800 dark:border-slate-700">
       <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[290px_minmax(0,1fr)]">
         <!-- 左侧：来源面板 -->
         <div class="space-y-4">
           <!-- 表格字段 -->
-          <div class="rounded-xl border border-slate-200 bg-white p-3.5">
-            <h4 class="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          <div class="rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-700 dark:bg-slate-800/60">
+            <h4 class="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               表格字段
             </h4>
             <el-scrollbar max-height="248">
@@ -463,7 +463,7 @@ async function submit() {
                 <div
                     v-for="(col, index) in columns"
                     :key="index"
-                    class="flex select-none items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 transition hover:border-brand/50 hover:bg-blue-50"
+                    class="flex select-none items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 transition hover:border-brand/50 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-700/40 dark:hover:border-brand/60 dark:hover:bg-blue-500/15"
                     :class="
                     col.display
                       ? 'cursor-grab touch-none active:cursor-grabbing'
@@ -472,22 +472,22 @@ async function submit() {
                     @pointerdown="col.display && startDrag({ payload: 'kw_' + index, from: -1, label: col.key }, $event)"
                     @dblclick="addKeyword(index)"
                 >
-                  <span class="shrink-0 text-xs text-brand">▣</span>
-                  <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-slate-700">
+                  <span class="shrink-0 text-xs text-brand dark:text-brand-light">▣</span>
+                  <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-slate-700 dark:text-slate-300">
                     {{ col.key }}
                   </span>
                   <el-tooltip v-if="!col.display" :content="col.reason" placement="top">
                     <el-tag size="small" type="danger" effect="dark">非法</el-tag>
                   </el-tooltip>
-                  <span v-else class="shrink-0 text-[10.5px] text-slate-300">双击添加</span>
+                  <span v-else class="shrink-0 text-[10.5px] text-slate-300 dark:text-slate-600">双击添加</span>
                 </div>
               </div>
             </el-scrollbar>
           </div>
 
           <!-- 自定义文本 -->
-          <div class="rounded-xl border border-slate-200 bg-white p-3.5">
-            <h4 class="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          <div class="rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-700 dark:bg-slate-800/60">
+            <h4 class="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               自定义文本
             </h4>
             <div class="flex gap-2">
@@ -499,14 +499,14 @@ async function submit() {
               />
               <el-button size="small" type="primary" plain @click="addCustomText">添加</el-button>
             </div>
-            <p class="mt-2 text-[11px] text-slate-400">
+            <p class="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
               固定文本会原样出现在每个新名字里
             </p>
           </div>
 
           <!-- 连接符号 -->
-          <div class="rounded-xl border border-slate-200 bg-white p-3.5">
-            <h4 class="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          <div class="rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-700 dark:bg-slate-800/60">
+            <h4 class="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               连接符号
             </h4>
             <el-tooltip
@@ -517,7 +517,7 @@ async function submit() {
                 :show-after="100"
             >
               <span
-                  class="mb-1.5 mr-1.5 inline-flex h-8 min-w-8 select-none items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-[13px] font-semibold text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+                  class="mb-1.5 mr-1.5 inline-flex h-8 min-w-8 select-none items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-2 text-[13px] font-semibold text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-700/40 dark:text-slate-300 dark:hover:border-emerald-500/50 dark:hover:bg-emerald-500/15 dark:hover:text-emerald-400"
                   :class="
                   same
                     ? 'cursor-not-allowed opacity-45'
@@ -529,14 +529,14 @@ async function submit() {
                 {{ s.label }}
               </span>
             </el-tooltip>
-            <p v-if="same" class="mt-1 text-[11px] text-slate-400">
+            <p v-if="same" class="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
               已开启统一分隔符，取消勾选后可单独设置
             </p>
           </div>
 
           <!-- 自定义连接符 -->
-          <div class="rounded-xl border border-slate-200 bg-white p-3.5">
-            <h4 class="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          <div class="rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-700 dark:bg-slate-800/60">
+            <h4 class="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               自定义连接符
             </h4>
             <div class="flex gap-2">
@@ -555,7 +555,7 @@ async function submit() {
               <span
                   v-for="conn in customConnectors"
                   :key="conn"
-                  class="cursor-grab select-none rounded-md bg-emerald-50 px-2 py-1 text-[11.5px] font-medium text-emerald-700 touch-none active:cursor-grabbing"
+                  class="cursor-grab select-none rounded-md bg-emerald-50 px-2 py-1 text-[11.5px] font-medium text-emerald-700 touch-none active:cursor-grabbing dark:bg-emerald-500/15 dark:text-emerald-400"
                   @pointerdown="!same && startDrag({ payload: 'conn_' + conn, from: -1, label: conn }, $event)"
                   @dblclick="!same && addConnector(conn)"
               >
@@ -569,11 +569,11 @@ async function submit() {
         <!-- 右侧：构建区 + 统一分隔符 + 预览 -->
         <div class="space-y-4">
           <!-- 构建区 -->
-          <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
-              <h3 class="text-sm font-semibold text-slate-800">命名构建区</h3>
+          <div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/60">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
+              <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">命名构建区</h3>
               <div class="flex items-center gap-2">
-                <span class="text-[11.5px] text-slate-400">拖入或双击左侧项，拖动可排序</span>
+                <span class="text-[11.5px] text-slate-400 dark:text-slate-500">拖入或双击左侧项，拖动可排序</span>
                 <el-button size="small" plain @click="addConnector(activeSep)">+ 分隔符</el-button>
                 <el-button
                     size="small"
@@ -590,12 +590,12 @@ async function submit() {
             <div
                 ref="dropArea"
                 class="min-h-[132px] p-4 transition-colors"
-                :class="dropIndex !== null ? 'bg-blue-50/60' : ''"
+                :class="dropIndex !== null ? 'bg-blue-50/60 dark:bg-blue-500/15' : ''"
             >
               <div
                   v-if="segments.length === 0"
-                  class="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-200 py-9 text-[13px] text-slate-400"
-                  :class="dropIndex !== null ? 'border-brand text-brand' : ''"
+                  class="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-200 py-9 text-[13px] text-slate-400 dark:border-slate-700 dark:text-slate-500"
+                  :class="dropIndex !== null ? 'border-brand text-brand dark:text-brand-light' : ''"
               >
                 <span class="text-2xl leading-none">⟱</span>
                 <span>把左侧的字段、连接符拖到这里开始构建</span>
@@ -610,10 +610,10 @@ async function submit() {
                       class="flex cursor-grab select-none items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[13px] font-medium transition active:cursor-grabbing touch-none"
                       :class="[
                       seg.type === 'keyword'
-                        ? 'border-brand/40 bg-blue-50 text-brand'
+                        ? 'border-brand/40 bg-blue-50 text-brand dark:bg-blue-500/15 dark:text-brand-light'
                         : seg.type === 'connector'
-                          ? 'border-emerald-200 bg-emerald-50 font-mono text-emerald-700'
-                          : 'border-amber-200 bg-amber-50 text-amber-700',
+                          ? 'border-emerald-200 bg-emerald-50 font-mono text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-400'
+                          : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-400',
                       drag?.from === index ? 'opacity-40' : '',
                     ]"
                       @pointerdown="startDrag({ payload: '', from: index, label: segLabel(seg) }, $event)"
@@ -621,7 +621,7 @@ async function submit() {
                     <span class="text-[11px] tracking-tighter opacity-40">⋮⋮</span>
                     <span>{{ segLabel(seg) }}</span>
                     <button
-                        class="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-black/10 p-0 text-[12px] leading-none opacity-60 transition hover:bg-black/20 hover:opacity-100"
+                        class="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-black/10 p-0 text-[12px] leading-none opacity-60 transition hover:bg-black/20 hover:opacity-100 dark:bg-white/10 dark:hover:bg-white/20"
                         title="移除"
                         @pointerdown.stop="() => {}"
                         @click.stop="removeSegment(index)"
@@ -639,12 +639,12 @@ async function submit() {
           </div>
 
           <!-- 统一分隔符 -->
-          <div class="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div class="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
             <el-checkbox v-model="same" size="large" class="!mr-0">
               <span class="font-semibold">统一分隔符</span>
             </el-checkbox>
             <template v-if="same">
-              <span class="text-sm text-slate-500">为：</span>
+              <span class="text-sm text-slate-500 dark:text-slate-400">为：</span>
               <el-radio-group v-model="sep" class="flex-wrap gap-y-2">
                 <el-tooltip
                     v-for="s in SEP_OPTIONS"
@@ -664,51 +664,51 @@ async function submit() {
                   placeholder="输入分隔符"
               />
             </template>
-            <span v-else class="text-[11.5px] text-slate-400">
+            <span v-else class="text-[11.5px] text-slate-400 dark:text-slate-500">
               构建区中的每个连接符可单独设置
             </span>
           </div>
 
           <!-- 预览 -->
-          <div class="rounded-xl border border-slate-200 bg-white p-4">
-            <h4 class="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800/60">
+            <h4 class="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               实时预览
             </h4>
             <div class="flex items-center gap-4">
               <div class="min-w-0 flex-1">
-                <p class="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">
+                <p class="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                   命名格式
                 </p>
-                <p class="whitespace-pre break-all rounded-md border border-blue-100 bg-blue-50 px-2.5 py-1.5 font-mono text-[13px] font-semibold text-brand">
+                <p class="whitespace-pre break-all rounded-md border border-blue-100 bg-blue-50 px-2.5 py-1.5 font-mono text-[13px] font-semibold text-brand dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-brand-light">
                   {{ formatText }}
                 </p>
               </div>
-              <span class="shrink-0 text-lg text-slate-300">→</span>
+              <span class="shrink-0 text-lg text-slate-300 dark:text-slate-600">→</span>
               <div class="min-w-0 flex-1">
-                <p class="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">
+                <p class="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                   样例文件名
                 </p>
-                <p class="whitespace-pre break-all rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 font-mono text-[13px] text-slate-600">
+                <p class="whitespace-pre break-all rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 font-mono text-[13px] text-slate-600 dark:border-slate-700 dark:bg-slate-700/40 dark:text-slate-300">
                   {{ exampleText }}
                 </p>
               </div>
             </div>
-            <p class="mt-2 text-[11.5px] text-slate-400">样例使用表格第一行数据生成</p>
+            <p class="mt-2 text-[11.5px] text-slate-400 dark:text-slate-500">样例使用表格第一行数据生成</p>
           </div>
         </div>
       </div>
 
       <!-- 目录 -->
-      <div class="mt-5 border-t border-slate-100 pt-4">
+      <div class="mt-5 border-t border-slate-100 pt-4 dark:border-slate-700">
         <div
             ref="dirZone"
             class="rounded-xl border-2 border-dashed p-3 transition-colors"
-            :class="dirDragging ? 'border-brand bg-blue-50' : 'border-slate-200'"
+            :class="dirDragging ? 'border-brand bg-blue-50 dark:bg-blue-500/15' : 'border-slate-200 dark:border-slate-700'"
             @dragover.prevent="dirDragging = true"
             @dragleave="dirDragging = false"
             @drop.prevent="onBrowserDrop"
         >
-          <p class="mb-2 text-sm text-brand">
+          <p class="mb-2 text-sm text-brand dark:text-brand-light">
             提示：把文件夹拖到虚线框内即可获取路径，也可以点击“浏览”选择或直接粘贴路径。
           </p>
           <div class="flex items-center gap-3">
@@ -741,7 +741,7 @@ async function submit() {
     <!-- 拖拽时跟随光标的浮层 -->
     <div
         v-if="dragging"
-        class="pointer-events-none fixed z-[9999] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-brand bg-white px-2.5 py-1.5 text-[13px] font-medium text-brand shadow-lg"
+        class="pointer-events-none fixed z-[9999] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-brand bg-white px-2.5 py-1.5 text-[13px] font-medium text-brand shadow-lg dark:bg-slate-800 dark:text-brand-light"
         :style="{ left: ghost.x + 'px', top: ghost.y + 'px' }"
     >
       {{ ghost.label }}

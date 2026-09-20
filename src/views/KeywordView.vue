@@ -68,7 +68,7 @@ async function submit() {
       </el-tag>
     </div>
 
-    <el-card shadow="never" class="!rounded-2xl" body-class="!p-4">
+    <el-card shadow="never" class="!rounded-2xl dark:bg-slate-800 dark:border-slate-700" body-class="!p-4">
       <el-alert
           type="info"
           :closable="false"
