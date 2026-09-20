@@ -20,6 +20,15 @@
         --el-color-primary-dark-2: #337ecc;
     }
 
+    /* 让滚动条、表单控件等原生 UI 跟随主题 */
+    html {
+        color-scheme: light;
+    }
+
+    html.dark {
+        color-scheme: dark;
+    }
+
     html,
     body,
     #app {
@@ -99,6 +108,26 @@
         line-height: 1.6;
         color: #5f6575;
     }
+
+    /* 暗色模式下的公共文本/徽章配色（各步骤页共用） */
+    html.dark .page-badge {
+        background: rgba(64, 158, 255, 0.16);
+        color: #66b1ff;
+    }
+
+    html.dark .page-title {
+        color: #e6eaf2;
+    }
+
+    html.dark .page-desc {
+        color: #98a2b6;
+    }
+    /* 暗色模式下表格跟随卡片底色（Element Plus 默认是中性灰，会和卡片的蓝灰不一致） */
+    html.dark .el-table {
+        --el-bg-color: transparent;
+        --el-table-tr-bg-color: transparent;
+    }
+
     /* 被选为关键字的表头 */
     .el-table .keyword-header {
         background-color: #409eff !important;

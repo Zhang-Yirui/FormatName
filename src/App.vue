@@ -17,8 +17,8 @@ import {EXCEL_EXT, STEPS, TEXT_EXT} from '@/constant'
 import { applyFormatRule, columns, maxStep, resetColumns, ruleChanged } from '@/store'
 import type { AppInfoResp } from '@/types'
 import { tablerIcon } from '@/utils/tablerIcon'
+import { isDark, toggleDark } from '@/utils/theme'
 
-const dark = ref(false)
 const aboutVisible = ref(false)
 const appInfo = ref<AppInfoResp>({
   name: 'FormatName',
@@ -138,11 +138,11 @@ function dotClass(index: number): string {
       'flex shrink-0 items-center justify-center rounded-full border-[1.8px] font-bold transition-all duration-200'
   switch (stateOf(index)) {
     case 'done':
-      return `${base} h-[26px] w-[26px] border-green-300 bg-emerald-50 text-xs text-green-600`
+      return `${base} h-[26px] w-[26px] border-green-300 bg-emerald-50 text-xs text-green-600 dark:border-green-500/60 dark:bg-emerald-500/15 dark:text-green-400`
     case 'cur':
-      return `${base} h-[29px] w-[29px] border-brand bg-brand text-[13px] text-white shadow-[0_0_0_5px_rgba(64,158,255,0.12)]`
+      return `${base} h-[29px] w-[29px] border-brand bg-brand text-[13px] text-white shadow-[0_0_0_5px_rgba(64,158,255,0.12)] dark:shadow-[0_0_0_5px_rgba(64,158,255,0.22)]`
     default:
-      return `${base} h-[26px] w-[26px] border-slate-300 bg-white text-xs text-slate-400`
+      return `${base} h-[26px] w-[26px] border-slate-300 bg-white text-xs text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-500`
   }
 }
 
@@ -152,11 +152,11 @@ function labelClass(index: number): string {
       'flex min-w-0 flex-1 flex-col gap-px rounded-lg border shadow-[0_1px_1.5px_rgba(0,0,0,0.025)] transition-all duration-200'
   switch (stateOf(index)) {
     case 'cur':
-      return `${base} border-blue-200 bg-blue-50 px-[13px] py-[9px]`
+      return `${base} border-blue-200 bg-blue-50 px-[13px] py-[9px] dark:border-blue-500/40 dark:bg-blue-500/15`
     case 'locked':
-      return `${base} border-slate-200 bg-white px-3 py-2`
+      return `${base} border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800/80`
     default:
-      return `${base} border-slate-200 bg-white px-3 py-2 group-hover:border-slate-300 group-hover:bg-slate-100`
+      return `${base} border-slate-200 bg-white px-3 py-2 group-hover:border-slate-300 group-hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/80 dark:group-hover:border-slate-600 dark:group-hover:bg-slate-700`
   }
 }
 
@@ -164,17 +164,19 @@ function labelClass(index: number): string {
 function labelNameClass(index: number): string {
   switch (stateOf(index)) {
     case 'cur':
-      return 'text-[14px] font-semibold text-brand'
+      return 'text-[14px] font-semibold text-brand dark:text-brand-light'
     case 'done':
-      return 'text-[13px] font-medium text-slate-500'
+      return 'text-[13px] font-medium text-slate-500 dark:text-slate-400'
     default:
-      return 'text-[13px] font-medium text-slate-700'
+      return 'text-[13px] font-medium text-slate-700 dark:text-slate-300'
   }
 }
 
 /** 步骤描述 */
 function labelDescClass(index: number): string {
-  return stateOf(index) === 'cur' ? 'text-[11.5px] text-blue-300' : 'text-[11px] text-slate-400'
+  return stateOf(index) === 'cur'
+      ? 'text-[11.5px] text-blue-300 dark:text-blue-300/85'
+      : 'text-[11px] text-slate-400 dark:text-slate-500'
 }
 
 /** 连接线左边距：跟随相邻圆点半径，保证与放大后的圆点居中对齐 */
@@ -227,17 +229,17 @@ async function reset() {
   <div class="h-screen">
     <el-container class="h-full">
       <!-- 左侧：步骤导航 -->
-      <el-aside class="flex w-60 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-slate-50">
+      <el-aside class="flex w-60 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-slate-50 transition-colors duration-200 dark:border-slate-800 dark:bg-slate-900">
         <!-- 品牌 -->
-        <el-header class="flex items-center gap-3 border-b border-slate-100 bg-white px-4 py-[18px]">
+        <el-header class="flex items-center gap-3 border-b border-slate-100 bg-white px-4 py-[18px] transition-colors duration-200 dark:border-slate-800 dark:bg-slate-800">
           <el-image
               class="block h-[34px] w-[34px] shrink-0 rounded-lg object-contain"
               src="/favicon.svg"
               :alt="appInfo.name"
           />
           <div class="flex min-w-0 flex-col gap-px">
-            <span class="text-sm font-semibold text-slate-800">{{appInfo.name}}</span>
-            <span class="text-[10.5px] text-slate-400">批量重命名工具</span>
+            <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">{{appInfo.name}}</span>
+            <span class="text-[10.5px] text-slate-400 dark:text-slate-500">批量重命名工具</span>
           </div>
         </el-header>
 
@@ -258,42 +260,42 @@ async function reset() {
             <div v-if="index < STEPS.length - 1" class="h-[10px]" :style="{ paddingLeft: connectorPad(index) }">
               <i
                   class="block h-full w-[1.5px] transition-colors duration-300"
-                  :class="index < maxStep ? 'bg-blue-300' : 'bg-slate-200'"
+                  :class="index < maxStep ? 'bg-blue-300 dark:bg-blue-500/60' : 'bg-slate-200 dark:bg-slate-700'"
               />
             </div>
           </template>
 
-          <p class="mb-0 mt-[18px] rounded-lg border border-slate-100 bg-white px-3 py-2.5 text-[11.5px] leading-[1.6] text-slate-500">
+          <p class="mb-0 mt-[18px] rounded-lg border border-slate-100 bg-white px-3 py-2.5 text-[11.5px] leading-[1.6] text-slate-500 transition-colors duration-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
             {{ hint }}
           </p>
         </nav>
 
         <!-- 底部 -->
-        <el-footer class="flex items-center gap-3 border-t border-slate-100 bg-white px-4 py-3 text-[11px] text-slate-400">
-          <span><b class="mr-0.5 text-[13px] font-semibold text-slate-800">{{ columns.length }}</b> 列</span>
-          <span><b class="mr-0.5 text-[13px] font-semibold text-slate-800">{{ keywordCount }}</b> 关键字</span>
+        <el-footer class="flex items-center gap-3 border-t border-slate-100 bg-white px-4 py-3 text-[11px] text-slate-400 transition-colors duration-200 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-500">
+          <span><b class="mr-0.5 text-[13px] font-semibold text-slate-800 dark:text-slate-100">{{ columns.length }}</b> 列</span>
+          <span><b class="mr-0.5 text-[13px] font-semibold text-slate-800 dark:text-slate-100">{{ keywordCount }}</b> 关键字</span>
           <el-button class="ml-auto shrink-0" size="small" :icon="RefreshLeft" @click="reset">重置</el-button>
         </el-footer>
       </el-aside>
 
       <el-container class="flex h-full min-w-0 flex-col">
         <!-- 左上：时间和日期 -->
-        <el-header class="flex h-18 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 py-19">
+        <el-header class="flex h-18 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 py-19 transition-colors duration-200 dark:border-slate-800 dark:bg-slate-800">
           <div class="mr-auto flex min-w-0 items-center gap-3">
-            <span class="fn-header-title text-[30px] font-bold tabular-nums tracking-wide text-slate-800">
+            <span class="fn-header-title text-[30px] font-bold tabular-nums tracking-wide text-slate-800 dark:text-slate-100">
               {{ timeText }}
             </span>
             <div class="flex min-w-0 flex-col gap-px leading-tight">
-              <span class="truncate text-[13px] font-medium text-slate-700">{{ solarText }}</span>
-              <span class="truncate text-[11px] text-slate-400">
+              <span class="truncate text-[13px] font-medium text-slate-700 dark:text-slate-300">{{ solarText }}</span>
+              <span class="truncate text-[11px] text-slate-400 dark:text-slate-500">
                 {{ lunarText }} · {{ lunarYearText }}
               </span>
             </div>
           </div>
           <!-- 右上：工具按钮 -->
           <div class="header-actions ml-4 shrink-0">
-            <el-tooltip :content="dark ? '切换亮色模式' : '切换暗色模式'" placement="bottom">
-              <el-button :icon="dark ? tablerIcon(IconMoon) : tablerIcon(IconSun)" circle @click="dark = !dark"/>
+            <el-tooltip :content="isDark ? '切换亮色模式' : '切换暗色模式'" placement="bottom">
+              <el-button :icon="isDark ? tablerIcon(IconMoon) : tablerIcon(IconSun)" circle @click="toggleDark()" />
             </el-tooltip>
             <el-tooltip content="仓库" placement="bottom">
               <el-button :icon="tablerIcon(IconBrandGithub)" circle @click="openLink(appInfo.repository)" />
@@ -308,7 +310,7 @@ async function reset() {
         </el-header>
 
         <!-- 右侧：页面路由 -->
-        <el-main class="min-h-0 flex-1 overflow-auto bg-slate-50 px-8 py-6 max-[1100px]:px-5 max-[1100px]:py-5">
+        <el-main class="min-h-0 flex-1 overflow-auto bg-slate-50 px-8 py-6 transition-colors duration-200 max-[1100px]:px-5 max-[1100px]:py-5 dark:bg-slate-900">
           <div class="mx-auto flex min-h-full w-full max-w-[1180px] flex-col">
             <router-view v-slot="{ Component }">
               <transition name="page" mode="out-in">
@@ -321,7 +323,7 @@ async function reset() {
     </el-container>
 
     <el-dialog v-model="aboutVisible" :title="`关于 ${appInfo.name}`" width="500px">
-      <div class="space-y-2 text-sm leading-6 text-slate-600">
+      <div class="space-y-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
         <p style="text-align: center">
           <b style="font-size: 16px">{{ appInfo.description }}</b>
         </p>
@@ -330,12 +332,12 @@ async function reset() {
           {{[...EXCEL_EXT, ...TEXT_EXT].map(ext => `${ext}`).join('、')}}。
         </p>
         <p><b>构建</b>：使用 <b>Tauri + Rust + Vue</b> 实现，无需额外安装运行环境，双击即用。</p>
-        <p class="text-xs text-slate-400" style="display: flex; gap: 5em">
+        <p class="text-xs text-slate-400 dark:text-slate-500" style="display: flex; gap: 5em">
           <span><b>版本</b>：{{ appInfo.version }}</span>
           <span><b>作者</b>：{{ appInfo.authors.join(' · ') }}</span>
           <span><b>开源协议</b>：{{ appInfo.license }}</span>
         </p>
-        <p class="text-xs text-slate-400">
+        <p class="text-xs text-slate-400 dark:text-slate-500">
           <span><b>注意</b>：请不要把本程序和要改名的文件放在同一个文件夹里。</span>
         </p>
       </div>

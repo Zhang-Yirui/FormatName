@@ -158,11 +158,11 @@ onMounted(load)
       </el-tag>
     </div>
 
-    <el-card shadow="never" class="!rounded-2xl">
+    <el-card shadow="never" class="!rounded-2xl dark:bg-slate-800 dark:border-slate-700">
       <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <!-- 新旧名字对照 -->
         <div>
-          <h3 class="mb-2 text-sm font-semibold text-slate-600">
+          <h3 class="mb-2 text-sm font-semibold text-slate-600 dark:text-slate-400">
             新旧名字对照（{{ list.length }} 个文件）
           </h3>
           <el-table :data="list" border stripe max-height="420">
@@ -173,7 +173,7 @@ onMounted(load)
             </el-table-column>
             <el-table-column prop="new" label="新名字" min-width="200" show-overflow-tooltip>
               <template #default="{ row }">
-                <span class="whitespace-pre text-brand">{{ row.new }}</span>
+                <span class="whitespace-pre text-brand dark:text-brand-light">{{ row.new }}</span>
               </template>
             </el-table-column>
           </el-table>
@@ -183,7 +183,7 @@ onMounted(load)
         <div class="space-y-4">
           <div>
             <h3
-                class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600"
+                class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600 dark:text-slate-400"
                 title="至少匹配到一次，包含多交的"
             >
               已交
@@ -196,19 +196,19 @@ onMounted(load)
                 <li
                     v-for="name in submitted"
                     :key="name"
-                    class="flex cursor-pointer items-center justify-between rounded bg-green-50 px-3 py-1 text-xs text-green-700 transition hover:bg-green-100"
+                    class="flex cursor-pointer items-center justify-between rounded bg-green-50 px-3 py-1 text-xs text-green-700 transition hover:bg-green-100 dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
                     @click="copy(name)"
                 >
                   <span class="whitespace-pre">{{ name }}</span>
                   <el-icon><CopyDocument /></el-icon>
                 </li>
-                <li v-if="submitted.length === 0" class="px-3 text-xs text-slate-400">无</li>
+                <li v-if="submitted.length === 0" class="px-3 text-xs text-slate-400 dark:text-slate-500">无</li>
               </ul>
             </el-scrollbar>
           </div>
 
           <div>
-            <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600">
+            <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600 dark:text-slate-400">
               没交
               <el-tag size="small" type="danger" effect="dark" round>
                 {{ missing.length }}
@@ -219,19 +219,19 @@ onMounted(load)
                 <li
                     v-for="name in missing"
                     :key="name"
-                    class="flex cursor-pointer items-center justify-between rounded bg-red-50 px-3 py-1 text-xs text-red-700 transition hover:bg-red-100"
+                    class="flex cursor-pointer items-center justify-between rounded bg-red-50 px-3 py-1 text-xs text-red-700 transition hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                     @click="copy(name)"
                 >
                   <span class="whitespace-pre">{{ name }}</span>
                   <el-icon><CopyDocument /></el-icon>
                 </li>
-                <li v-if="missing.length === 0" class="px-3 text-xs text-slate-400">无</li>
+                <li v-if="missing.length === 0" class="px-3 text-xs text-slate-400 dark:text-slate-500">无</li>
               </ul>
             </el-scrollbar>
           </div>
 
           <div>
-            <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600">
+            <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600 dark:text-slate-400">
               多交
               <el-tag size="small" type="warning" effect="dark" round>
                 {{ duplicated.length }}
@@ -242,19 +242,19 @@ onMounted(load)
                 <li
                     v-for="name in duplicated"
                     :key="name"
-                    class="flex cursor-pointer items-center justify-between rounded bg-amber-50 px-3 py-1 text-xs text-amber-700 transition hover:bg-amber-100"
+                    class="flex cursor-pointer items-center justify-between rounded bg-amber-50 px-3 py-1 text-xs text-amber-700 transition hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20"
                     @click="copy(name)"
                 >
                   <span class="whitespace-pre">{{ name }}</span>
                   <el-icon><CopyDocument /></el-icon>
                 </li>
-                <li v-if="duplicated.length === 0" class="px-3 text-xs text-slate-400">无</li>
+                <li v-if="duplicated.length === 0" class="px-3 text-xs text-slate-400 dark:text-slate-500">无</li>
               </ul>
             </el-scrollbar>
           </div>
 
           <div>
-            <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600">
+            <h3 class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-600 dark:text-slate-400">
               未知
               <el-tag size="small" type="info" effect="dark" round>
                 {{ unknown.length }}
@@ -265,22 +265,22 @@ onMounted(load)
                 <li
                     v-for="name in unknown"
                     :key="name"
-                    class="flex cursor-pointer items-center justify-between rounded bg-slate-100 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-200"
+                    class="flex cursor-pointer items-center justify-between rounded bg-slate-100 px-3 py-1 text-xs text-slate-600 transition hover:bg-slate-200 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700"
                     @click="copy(name)"
                 >
                   <span class="whitespace-pre">{{ name }}</span>
                   <el-icon><CopyDocument /></el-icon>
                 </li>
-                <li v-if="unknown.length === 0" class="px-3 text-xs text-slate-400">无</li>
+                <li v-if="unknown.length === 0" class="px-3 text-xs text-slate-400 dark:text-slate-500">无</li>
               </ul>
             </el-scrollbar>
           </div>
 
-          <p class="text-xs text-slate-400">点击列表内容即可复制到剪贴板</p>
+          <p class="text-xs text-slate-400 dark:text-slate-500">点击列表内容即可复制到剪贴板</p>
         </div>
       </div>
 
-      <div class="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+      <div class="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 dark:border-slate-700">
         <el-button size="large" :icon="ArrowLeft" @click="router.push('/format')">返回</el-button>
         <el-button v-if="flag === 0" type="primary" size="large" :loading="loading" @click="doRename">
           改名

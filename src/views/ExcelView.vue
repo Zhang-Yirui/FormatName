@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import {computed, nextTick, onMounted, onUnmounted, ref} from 'vue'
 import type { ComponentPublicInstance } from 'vue'
-import { useRouter } from 'vue-router'
-import { open } from '@tauri-apps/plugin-dialog'
-import { getCurrentWebview } from '@tauri-apps/api/webview'
-import { ElMessage } from 'element-plus'
-import { FolderOpened, Right } from '@element-plus/icons-vue'
-import { renameHeader, submitExcelPath, submitTableText } from '@/api'
+import {useRouter} from 'vue-router'
+import {open} from '@tauri-apps/plugin-dialog'
+import {getCurrentWebview} from '@tauri-apps/api/webview'
+import {ElMessage} from 'element-plus'
+import {FolderOpened, Right} from '@element-plus/icons-vue'
+import {renameHeader, submitExcelPath, submitTableText} from '@/api'
 import {EXCEL_EXT, STEPS, TEXT_EXT} from '@/constant'
 import {columns, loadColumns, resetRule, resetStep} from '@/store'
 
@@ -274,7 +274,7 @@ onUnmounted(() => unlistenDragDrop?.())
       </div>
     </div>
 
-    <el-card v-loading="loading" shadow="never" class="!rounded-2xl">
+    <el-card v-loading="loading" shadow="never" class="!rounded-2xl dark:bg-slate-800 dark:border-slate-700">
       <el-alert
           type="info"
           :closable="false"
@@ -307,14 +307,14 @@ onUnmounted(() => unlistenDragDrop?.())
       <!-- 表格数据（导入后立即显示） -->
       <template v-if="hasData">
         <div class="mt-5 flex items-center justify-between">
-          <span class="text-[13px] font-semibold text-slate-700">
+          <span class="text-[13px] font-semibold text-slate-700 dark:text-slate-300">
             表格数据
             <span class="ml-2 text-[11.5px] font-normal text-slate-400">双击表头可修改名称</span>
-            <span v-if="sourceName" class="ml-2 text-[11.5px] font-normal text-slate-400">
+            <span v-if="sourceName" class="ml-2 text-[11.5px] font-normal text-slate-400 dark:text-slate-500">
               {{ sourceName }}
             </span>
           </span>
-          <span class="text-[11.5px] text-slate-400">
+          <span class="text-[11.5px] text-slate-400 dark:text-slate-500">
             共 {{ columns.length }} 列 · {{ rowCount }} 行
           </span>
         </div>
@@ -359,7 +359,7 @@ onUnmounted(() => unlistenDragDrop?.())
           </el-table-column>
         </el-table>
       </template>
-      <p v-else class="mt-5 text-center text-[13px] text-slate-400">尚未导入表格数据，请先选择或拖入表格文件</p>
+      <p v-else class="mt-5 text-center text-[13px] text-slate-400 dark:text-slate-500">尚未导入表格数据，请先选择或拖入表格文件</p>
 
       <div class="mt-5 flex items-center gap-3">
         <el-button type="primary" size="large" :icon="Right" :disabled="!hasData" @click="next">
@@ -414,6 +414,25 @@ onUnmounted(() => unlistenDragDrop?.())
   margin: 0 0 14px;
   font-size: 13px;
   color: #949aab;
+}
+
+/* 暗色模式：拖拽区改为深色底 + 亮边框 */
+html.dark .drop-zone {
+  border-color: #475569;
+  background: #1e293b;
+}
+
+html.dark .drop-zone.is-dragover {
+  border-color: var(--el-color-primary, #409eff);
+  background: rgba(64, 158, 255, 0.16);
+}
+
+html.dark .drop-text {
+  color: #cbd5e1;
+}
+
+html.dark .drop-hint {
+  color: #94a3b8;
 }
 
 .hidden-input {
