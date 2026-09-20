@@ -7,6 +7,8 @@ export default {
   // 扫描模板中使用了类名的文件
   content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
   important: true,
+  // 由 <html class="dark"> 手动控制暗色模式（不跟随系统自动切换）
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
