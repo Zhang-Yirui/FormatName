@@ -25,6 +25,10 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
 
+      - name: Check jq
+        run: |
+          jq --version
+
       - uses: pnpm/setup@v1
         with:
           version: 11
