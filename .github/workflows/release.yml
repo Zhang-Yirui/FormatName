@@ -29,6 +29,10 @@ jobs:
         run: |
           jq --version
 
+      - name: Check yq
+        run: |
+          yq --version
+
       - uses: pnpm/setup@v1
         with:
           version: 11
